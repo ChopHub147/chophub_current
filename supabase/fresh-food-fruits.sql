@@ -1,0 +1,35 @@
+-- Additional Fresh Food fruit products (local, tropical, and imported).
+insert into public.products (id, name, description, category, section, unit, price, image, stock_status)
+values
+  ('fresh-mango', 'Mango', 'Sweet, juicy seasonal tropical fruit, best fresh or blended.', 'Fruits', 'fresh-food', '1 kg', 2200, '🥭', 'in_stock'),
+  ('fresh-pineapple', 'Pineapple', 'Sweet-tart tropical fruit, great fresh or for juice.', 'Fruits', 'fresh-food', '1 piece', 2000, '🍍', 'in_stock'),
+  ('fresh-watermelon', 'Watermelon', 'Large, juicy, hydrating fruit popular in the hot season.', 'Fruits', 'fresh-food', '1 piece', 3500, '🍉', 'in_stock'),
+  ('fresh-agbalumo', 'African Star Apple (Agbalumo / Udara)', 'Seasonal orange-skinned fruit with sweet-tart pulp and chewy skin.', 'Fruits', 'fresh-food', '1 basket', 2500, '🟠', 'in_stock'),
+  ('fresh-ube', 'African Pear (Ube)', 'Soft, oily fruit usually softened in hot water or roasted before eating.', 'Fruits', 'fresh-food', '1 basket', 2800, '🟤', 'in_stock'),
+  ('fresh-guava', 'Guava', 'Fragrant, slightly grainy fruit with pink or white flesh, rich in vitamin C.', 'Fruits', 'fresh-food', '1 kg', 2000, '🍈', 'in_stock'),
+  ('fresh-soursop', 'Soursop', 'Large, spiky green fruit with creamy, tangy-sweet flesh, great for juices and smoothies.', 'Fruits', 'fresh-food', '1 piece', 3000, '🥝', 'in_stock'),
+  ('fresh-coconut', 'Coconut', 'Hard-shelled tropical fruit with refreshing water and rich white flesh.', 'Fruits', 'fresh-food', '1 piece', 1500, '🥥', 'in_stock'),
+  ('fresh-icheku', 'Velvet Tamarind (Icheku / Awin)', 'Small, dark, sticky-sweet fruit sold in packs; a popular snack.', 'Fruits', 'fresh-food', '1 pack', 1000, '🟤', 'in_stock'),
+  ('fresh-tigernut', 'Tiger Nut (Aya / Ofio)', 'Small, chewy, nut-like tuber with a sweet taste, popular for snacks and drinks.', 'Fruits', 'fresh-food', '1 pack', 1200, '🌰', 'in_stock'),
+  ('fresh-cashew-apple', 'Cashew Apple', 'Juicy, tart-sweet fruit attached to the cashew nut; highly seasonal.', 'Fruits', 'fresh-food', '1 pack', 1500, '🍎', 'in_stock'),
+  ('fresh-lime', 'Lime', 'Small, very sour citrus used for drinks, seasoning, and freshness.', 'Fruits', 'fresh-food', '1 pack', 1000, '🍋', 'in_stock'),
+  ('fresh-tangerine', 'Tangerine / Mandarin', 'Easy-to-peel sweet citrus, often preferred over regular oranges.', 'Fruits', 'fresh-food', '1 dozen', 3000, '🍊', 'in_stock'),
+  ('fresh-grapefruit', 'Grapefruit', 'Larger citrus with a bittersweet taste, available in white and red varieties.', 'Fruits', 'fresh-food', '1 kg', 2500, '🍊', 'in_stock'),
+  ('fresh-avocado', 'Avocado', 'Creamy, nutrient-dense fruit (also called "pear"), popular for smoothies and spreads.', 'Fruits', 'fresh-food', '1 kg', 3000, '🥑', 'in_stock'),
+  ('fresh-breadfruit', 'Breadfruit', 'Large, starchy fruit usually cooked; more common in certain regions.', 'Fruits', 'fresh-food', '1 piece', 2500, '🟤', 'in_stock'),
+  ('fresh-apple', 'Apple (Red / Green)', 'Crisp, imported fruit available in most urban markets and stores.', 'Fruits', 'fresh-food', '1 kg', 3500, '🍎', 'in_stock'),
+  ('fresh-grapes', 'Grapes', 'Sweet or slightly tart clusters, usually imported and sold in packs.', 'Fruits', 'fresh-food', '1 pack', 4000, '🍇', 'in_stock'),
+  ('fresh-strawberry', 'Strawberry', 'Soft, sweet red berries sold in small packs (mostly imported or greenhouse-grown).', 'Fruits', 'fresh-food', '1 pack', 3500, '🍓', 'in_stock'),
+  ('fresh-kiwi', 'Kiwi', 'Fuzzy-skinned fruit with bright green, tangy flesh.', 'Fruits', 'fresh-food', '1 pack', 3000, '🥝', 'in_stock'),
+  ('fresh-pomegranate', 'Pomegranate', 'Seedy fruit with juicy, sweet-tart arils; often sold as a premium item.', 'Fruits', 'fresh-food', '1 piece', 4500, '🟣', 'in_stock'),
+  ('fresh-lemon', 'Lemon', 'Sour citrus, usually imported; used mainly for drinks and cooking.', 'Fruits', 'fresh-food', '1 pack', 2000, '🍋', 'in_stock'),
+  ('fresh-plum', 'Plum', 'Soft, sweet stone fruit available seasonally in better markets.', 'Fruits', 'fresh-food', '1 pack', 3500, '🟣', 'in_stock')
+on conflict (id) do update set
+  name = excluded.name,
+  description = excluded.description,
+  category = excluded.category,
+  section = excluded.section,
+  unit = excluded.unit,
+  price = excluded.price,
+  image = excluded.image,
+  stock_status = excluded.stock_status;
