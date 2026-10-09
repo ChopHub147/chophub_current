@@ -9,6 +9,7 @@ type RiderPayload = {
   phone?: unknown;
   baseArea?: unknown;
   availability?: unknown;
+  accountStatus?: unknown;
 };
 
 async function requireAdmin() {
@@ -21,12 +22,13 @@ function riderFields(body: RiderPayload) {
     ...(typeof body.phone === "string" ? { phone: body.phone.trim() } : {}),
     ...(typeof body.baseArea === "string" ? { base_area: body.baseArea.trim() } : {}),
     ...(body.availability === "available" || body.availability === "busy" || body.availability === "offline" ? { availability: body.availability } : {}),
+    ...(body.accountStatus === "pending" || body.accountStatus === "approved" || body.accountStatus === "suspended" ? { account_status: body.accountStatus } : {}),
   };
 }
 
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await supabaseAdminRequest("riders?select=*&order=name.asc"));
+  return NextResponse.json(await supabaseAdminRequest("riders?select=id,name,phone,base_area,availability,account_status,last_location_at&order=name.asc"));
 }
 
 export async function POST(request: Request) {

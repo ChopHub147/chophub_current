@@ -9,6 +9,9 @@ const DeliveryMapPicker = dynamic(() => import("@/components/DeliveryMapPicker")
 
 type CartItem = {
   id: string;
+  productId?: string;
+  vendorId?: number;
+  vendorName?: string;
   name: string;
   price: number;
   quantity: number;
@@ -35,8 +38,12 @@ type CheckoutQuoteView = {
   deliveryLongitude: number;
   locationSource: "device" | "address";
   resolvedDeliveryLocation?: string;
+  selectedVendors: Array<{ itemId: string; vendorId: number; vendorName: string }>;
+  items: Array<{ id: string; price: number; vendorId?: number; isMeal: boolean }>;
   fees: { deliveryFee: number; extraPickupFee: number; eveningDriverFee: number; totalDeliveryCharges: number };
 };
+
+type MealVendorOption = { id: number; name: string; price: number };
 
 type DatabaseMeal = {
   id: number;
@@ -46,6 +53,7 @@ type DatabaseMeal = {
   image: string;
   category: string;
   available?: boolean;
+  vendors?: MealVendorOption[];
 };
 
 type Dish = {
@@ -57,6 +65,7 @@ type Dish = {
   type: "soup" | "meat" | "fish" | "rice" | "special";
   available?: boolean;
   sectionTitle?: string;
+  vendors?: MealVendorOption[];
 };
 
 const cartStorageKey = "chophub-cart";
@@ -303,6 +312,12 @@ export default function CookedFoodPage() {
     },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
+  const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
+    ["soup-swallow", "Soup and Swallow"],
+    ["meat", "Meat"],
+    ["rice", "Rice"],
+    ["dessert", "Dessert"],
+  ]);
 
   const featuredDishes = dishes.filter((dish) =>
     [1, 3, 12, 15].includes(dish.id)
@@ -317,6 +332,7 @@ export default function CookedFoodPage() {
   const [selectedDrink, setSelectedDrink] = useState<
     Record<number, { name: string; quantity: number }>
   >({});
+  const [selectedVendorByDish, setSelectedVendorByDish] = useState<Record<number, number | null>>({});
   const [customizingDish, setCustomizingDish] = useState<
     (typeof dishes)[number] | null
   >(null);
@@ -329,6 +345,16 @@ export default function CookedFoodPage() {
         return response.json() as Promise<DatabaseMeal[]>;
       })
       .then((meals) => {
+        const categoryNames: Record<string, string> = {
+          "soup-swallow": "Soup and Swallow",
+          meat: "Meat",
+          rice: "Rice",
+          dessert: "Dessert",
+        };
+        const categories = [...new Set(meals.map((meal) => meal.category.trim()).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b))
+          .map((category) => [category, categoryNames[category] ?? category.split(/[-_\\s]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")] as [string, string]);
+        setMealCategories(categories);
         setDishes(
           meals.map((meal) => ({
             id: meal.id,
@@ -337,6 +363,7 @@ export default function CookedFoodPage() {
             desc: meal.description,
             image: meal.image,
             available: meal.available,
+            vendors: meal.vendors ?? [],
             type: (meal.category === "soup-swallow"
               ? "soup"
               : meal.category === "rice"
@@ -507,25 +534,28 @@ export default function CookedFoodPage() {
               .join(" + ")}${includesWater ? " + Water" : ""}${drinkLabel}`
           : `${dish.name}${includesWater ? " + Water" : ""}${drinkLabel}`;
 
+    const selectedVendorId = selectedVendorByDish[dish.id] ?? null;
+    const selectedVendor = dish.vendors?.find((vendor) => vendor.id === selectedVendorId);
+    const baseMealPrice = selectedVendor?.price ?? dish.price;
     const itemPrice =
       dish.type === "soup"
-        ? dish.price + (swallowOptions.find((option) => option.name === swallow)?.price ?? 0)
+        ? baseMealPrice + (swallowOptions.find((option) => option.name === swallow)?.price ?? 0)
           + (includesWater ? waterPrice : 0) + drinkCost
         : dish.type === "meat"
-          ? dish.price + 1000 + (includesWater ? waterPrice : 0) + drinkCost
+          ? baseMealPrice + 1000 + (includesWater ? waterPrice : 0) + drinkCost
           : dish.type === "rice"
-            ? dish.price +
+            ? baseMealPrice +
               proteinAddons.reduce(
                 (sum, option) =>
                   sum + option.price * selectedProteins[option.name],
                 0
             ) +
             (includesWater ? waterPrice : 0) + drinkCost
-          : dish.price +
+          : baseMealPrice +
             (includesWater ? waterPrice : 0) +
             drinkCost;
 
-    const cartId =
+    const baseCartId =
       dish.type === "soup"
         ? `${dish.id}-${swallow}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
         : dish.type === "meat"
@@ -535,9 +565,11 @@ export default function CookedFoodPage() {
                 .map((option) => `${option.name}-${selectedProteins[option.name]}`)
                 .join("_") || "plain"}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
           : `${dish.id}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`;
+        const cartId = `${baseCartId}-vendor-${selectedVendorId ?? "nearest"}`;
 
     const cartItem: CartItem = {
       id: cartId,
+      ...(selectedVendor ? { vendorId: selectedVendor.id, vendorName: selectedVendor.name } : {}),
       name: itemName,
       price: itemPrice,
       quantity,
@@ -660,7 +692,7 @@ export default function CookedFoodPage() {
     if (!cart.length) return;
     setIsQuoting(true);
     try {
-      const response = await fetch("/api/checkout/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: cart.map(({ id, name, quantity }) => ({ id, name, quantity })), latitude: deliveryCoordinates?.latitude, longitude: deliveryCoordinates?.longitude, deliveryAddress, deliveryArea }) });
+      const response = await fetch("/api/checkout/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: cart.map(({ id, productId, name, quantity, vendorId }) => ({ id: productId || id, name, quantity, ...(vendorId ? { vendorId } : {}) })), latitude: deliveryCoordinates?.latitude, longitude: deliveryCoordinates?.longitude, deliveryAddress, deliveryArea }) });
       const result = await response.json() as CheckoutQuoteView & { error?: string };
       if (!response.ok) throw new Error(result.error || "We could not calculate delivery charges.");
       setCheckoutQuote(result);
@@ -716,7 +748,10 @@ export default function CookedFoodPage() {
           expectedTotal: checkoutQuote.totalAmount,
           quoteToken: checkoutQuote.quoteToken,
           paymentMethod,
-          items: cart.map(({ id, name, quantity }) => ({ id, name, quantity })),
+          items: cart.map(({ id, productId, name, quantity, vendorId }) => {
+            const resolvedVendorId = checkoutQuote.selectedVendors.find((selection) => selection.itemId === (productId || id))?.vendorId;
+            return { id: productId || id, name, quantity, vendorId: vendorId ?? resolvedVendorId };
+          }),
         }),
       });
       const result = await response.json() as { error?: string; authorizationUrl?: string; orderId?: number; paymentReference?: string; foodSubtotal?: number; totalAmount?: number; quote?: CheckoutQuoteView };
@@ -864,13 +899,8 @@ export default function CookedFoodPage() {
             Featured Dishes
           </h2>
           <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              ["Soup and Swallow", "soup-swallow"],
-              ["Meat", "meat"],
-              ["Rice", "rice"],
-              ["Dessert", "dessert"],
-            ].map(([label, category]) => (
-              <Link key={category} href={`/menu?category=${category}`} className="rounded-xl border border-green-100 bg-white px-3 py-3 text-center text-sm font-semibold text-green-900 shadow-sm transition hover:bg-green-50">
+            {mealCategories.map(([category, label]) => (
+              <Link key={category} href={`/menu?category=${encodeURIComponent(category)}`} className="rounded-xl border border-green-100 bg-white px-3 py-3 text-center text-sm font-semibold text-green-900 shadow-sm transition hover:bg-green-50">
                 {label}
               </Link>
             ))}
@@ -894,7 +924,7 @@ export default function CookedFoodPage() {
                         {dish.name}
                       </h3>
                       <span className="text-green-700 font-bold text-xs md:text-base">
-                        {dish.type === "rice" ? "From " : ""}₦{dish.price.toLocaleString()}
+                        {dish.type === "rice" || (dish.vendors?.length ?? 0) > 0 ? "From " : ""}₦{Math.min(dish.price, ...(dish.vendors?.map((vendor) => vendor.price) ?? [])).toLocaleString()}
                       </span>
                   </div>
                   {dish.available === false && (
@@ -987,7 +1017,7 @@ export default function CookedFoodPage() {
                   {customizingDish.name}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Base price: ₦{customizingDish.price.toLocaleString()}
+                  Price: ₦{(customizingDish.vendors?.find((vendor) => vendor.id === (selectedVendorByDish[customizingDish.id] ?? null))?.price ?? customizingDish.price).toLocaleString()}
                 </p>
               </div>
               <button
@@ -1007,6 +1037,25 @@ export default function CookedFoodPage() {
                 addToCart(customizingDish, customizationQuantity);
               }}
             >
+              {(customizingDish.vendors?.length ?? 0) > 0 && (
+                <label className="mb-5 block">
+                  <span className="mb-2 block text-sm font-semibold text-green-900">Choose a vendor</span>
+                  <select
+                    value={selectedVendorByDish[customizingDish.id] ?? ""}
+                    onChange={(event) => setSelectedVendorByDish((current) => ({
+                      ...current,
+                      [customizingDish.id]: event.target.value ? Number(event.target.value) : null,
+                    }))}
+                    className="w-full rounded-lg border border-green-200 bg-white px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Nearest vendor automatically</option>
+                    {customizingDish.vendors?.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id}>{vendor.name} — ₦{vendor.price.toLocaleString()}</option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-gray-500">Automatic orders use the nearest vendor; that vendor&apos;s price is confirmed with delivery.</span>
+                </label>
+              )}
               {customizingDish.type === "soup" && (
                 <label className="mb-5 block">
                   <span className="mb-2 block text-sm font-semibold text-green-900">
@@ -1274,7 +1323,10 @@ export default function CookedFoodPage() {
                 <>
                   {/* Cart Items */}
                   <div className="space-y-4 mb-6">
-                    {cart.map((item) => (
+                    {cart.map((item) => {
+                      const quoteItem = checkoutQuote?.items.find((quoted) => quoted.id === (item.productId || item.id));
+                      const quoteVendor = checkoutQuote?.selectedVendors.find((selection) => selection.itemId === (item.productId || item.id));
+                      return (
                       <div key={item.id} className="flex gap-4 border-b pb-4">
                         <img
                           src={item.image}
@@ -1286,8 +1338,9 @@ export default function CookedFoodPage() {
                             {item.name}
                           </h3>
                           <p className="text-green-700 font-medium">
-                            ₦{item.price.toLocaleString()} / portion
+                            ₦{(quoteItem?.isMeal ? quoteItem.price : item.price).toLocaleString()} / portion
                           </p>
+                          <p className="mt-1 text-xs text-gray-500">Vendor: {item.vendorName ?? quoteVendor?.vendorName ?? "Nearest vendor (automatic)"}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <button
                               onClick={() => updateQuantity(item.id, -1)}
@@ -1305,7 +1358,8 @@ export default function CookedFoodPage() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Customer Details Form */}

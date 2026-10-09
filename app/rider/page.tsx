@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type RiderOrder = {
   id: number | string;
@@ -30,9 +30,8 @@ type RiderStatus =
   | "delivered"
   | "exception";
 
-const RIDER_ID = 1;
-
 const GREEN = "#07833F";
+type RiderIdentity = { id: number; name: string; phone: string; availability?: "available" | "busy" | "offline" };
 
 function naira(value: number | null | undefined) {
   return `₦${Number(value || 0).toLocaleString("en-NG")}`;
@@ -94,6 +93,8 @@ export default function RiderPage() {
     useState<RiderOrder | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [rider, setRider] = useState<RiderIdentity | null>(null);
   const [updating, setUpdating] = useState(false);
   const [online, setOnline] = useState(false);
   const [screen, setScreen] = useState<
@@ -102,12 +103,12 @@ export default function RiderPage() {
 
   const [error, setError] = useState("");
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     try {
       setError("");
 
       const response = await fetch(
-        `/api/rider/orders?riderId=${RIDER_ID}`,
+        "/api/rider/orders",
         {
           cache: "no-store",
         }
@@ -129,18 +130,6 @@ export default function RiderPage() {
 
       setOrders(riderOrders);
 
-      // Keep the current selected order if possible.
-      if (selectedOrder) {
-        const refreshed = riderOrders.find(
-          (order) =>
-            String(order.id) ===
-            String(selectedOrder.id)
-        );
-
-        if (refreshed) {
-          setSelectedOrder(refreshed);
-        }
-      }
     } catch (err) {
       console.error(err);
 
@@ -152,11 +141,22 @@ export default function RiderPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    fetch("/api/rider/session", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not check rider sign-in status");
+        return result as { rider: RiderIdentity | null };
+      })
+      .then((result) => {
+        setRider(result.rider);
+        if (result.rider) void loadOrders();
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Could not check rider sign-in status"))
+      .finally(() => setAuthChecked(true));
+  }, [loadOrders]);
 
   const activeOrders = useMemo(() => {
     return orders.filter(
@@ -193,9 +193,8 @@ export default function RiderPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-  riderId: RIDER_ID,
-  status: nextStatus,
-}),
+            status: nextStatus,
+          }),
         }
       );
 
@@ -289,6 +288,19 @@ export default function RiderPage() {
     0
   );
 
+  if (!authChecked) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#f3f8f3] px-5 text-sm font-medium text-slate-600">Checking rider sign-in…</main>;
+  }
+
+  if (!rider) return <RiderAccess onSignedIn={(identity) => { setRider(identity); setError(""); void loadOrders(); }} />;
+
+  const signOut = async () => {
+    await fetch("/api/rider/login", { method: "DELETE" });
+    setRider(null);
+    setOrders([]);
+    setSelectedOrder(null);
+  };
+
   return (
     <main className="min-h-screen bg-[#f5f7f6] text-gray-900">
       <div className="mx-auto min-h-screen max-w-md bg-white shadow-sm">
@@ -315,12 +327,13 @@ export default function RiderPage() {
                   </p>
 
                   <p className="text-xs text-gray-500">
-                    Rider
+                    {rider.name}
                   </p>
                 </div>
               </div>
             </div>
 
+            <div className="flex items-center gap-2">
             <button
               onClick={() => setOnline(!online)}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -337,6 +350,8 @@ export default function RiderPage() {
                 ? "Online"
                 : "Offline"}
             </button>
+            <button type="button" onClick={signOut} className="rounded-full px-3 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100">Sign out</button>
+            </div>
           </div>
         </header>
 
@@ -353,7 +368,7 @@ export default function RiderPage() {
             <>
               <div className="mb-5">
                 <p className="text-sm text-gray-500">
-                  Good day, Rider
+                  Good day, {rider.name.split(" ")[0]}
                 </p>
 
                 <h1 className="text-2xl font-bold">
@@ -903,6 +918,75 @@ export default function RiderPage() {
           </button>
         </nav>
       </div>
+    </main>
+  );
+}
+
+function RiderAccess({ onSignedIn }: { onSignedIn: (rider: RiderIdentity) => void }) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [baseArea, setBaseArea] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(mode === "signup" ? "/api/rider/signup" : "/api/rider/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mode === "signup" ? { name, phone, baseArea, password } : { phone, password }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "We could not complete that request.");
+      if (mode === "signup") {
+        setPending(true);
+      } else {
+        onSignedIn(result.rider as RiderIdentity);
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We could not complete that request.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,#dcf4e3,transparent_55%),#f5f8f2] px-4 py-10">
+      <section className="w-full max-w-md rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-xl shadow-emerald-950/10 sm:p-8">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-700 text-xl font-black text-white">C</div>
+          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">ChopHub</p><p className="text-sm font-medium text-slate-500">Rider portal</p></div>
+        </div>
+        {pending ? (
+          <div role="status" className="rounded-2xl bg-emerald-50 p-5 text-emerald-950">
+            <p className="text-lg font-bold">Application received</p>
+            <p className="mt-2 text-sm leading-6 text-emerald-900">Your rider account is pending ChopHub approval. You can sign in after an admin approves your account.</p>
+            <button type="button" onClick={() => { setPending(false); setMode("signin"); setPassword(""); }} className="mt-4 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Back to sign in</button>
+          </div>
+        ) : (
+          <>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{mode === "signup" ? "Join the rider team" : "Welcome back"}</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{mode === "signup" ? "Create a rider account. ChopHub will review your details before you can access deliveries." : "Sign in to view and manage the deliveries assigned to you."}</p>
+            {error && <p role="alert" className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+            <form onSubmit={submit} className="mt-5 space-y-3">
+              {mode === "signup" && <>
+                <label className="block text-sm font-semibold text-slate-700">Full name<input required autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" /></label>
+                <label className="block text-sm font-semibold text-slate-700">Base area<input autoComplete="address-level2" value={baseArea} onChange={(event) => setBaseArea(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" placeholder="e.g. Calabar South" /></label>
+              </>}
+              <label className="block text-sm font-semibold text-slate-700">Phone number<input required type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" /></label>
+              <label className="block text-sm font-semibold text-slate-700">Password<input required type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 10 : 1} value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" />{mode === "signup" && <span className="mt-1 block text-xs font-normal text-slate-500">Use at least 10 characters.</span>}</label>
+              <button type="submit" disabled={busy} className="mt-2 w-full rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white shadow-md shadow-emerald-900/15 transition hover:bg-emerald-800 disabled:opacity-60">{busy ? "Please wait…" : mode === "signup" ? "Create rider account" : "Sign in"}</button>
+            </form>
+            <p className="mt-5 text-center text-sm text-slate-600">{mode === "signup" ? "Already have an account?" : "New to the rider team?"}{" "}<button type="button" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); }} className="font-bold text-emerald-800 hover:underline">{mode === "signup" ? "Sign in" : "Sign up"}</button></p>
+          </>
+        )}
+      </section>
     </main>
   );
 }

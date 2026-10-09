@@ -35,9 +35,21 @@ function productFields(body: ProductPayload) {
   };
 }
 
-export async function GET() {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await supabaseAdminRequest("products?select=*&order=section.asc,id.asc"));
+export async function GET(request: Request) {
+  const section = new URL(request.url).searchParams.get("section");
+  if (section !== "foodstuff" && section !== "fresh-food") {
+    return NextResponse.json({ error: "A valid product section is required" }, { status: 400 });
+  }
+  let products: Array<Record<string, unknown>>;
+  try {
+    products = await supabaseAdminRequest(`products?select=id,name,description,category,subcategory,section,unit,price,image,stock_status,variant_options&section=eq.${section}&order=id.asc`);
+  } catch {
+    const legacyProducts = await supabaseAdminRequest<Array<Record<string, unknown>>>(`products?select=id,name,description,category,section,unit,price,image,stock_status&section=eq.${section}&order=id.asc`);
+    products = legacyProducts.map((product) => ({ ...product, subcategory: "", variant_options: [] }));
+  }
+  return NextResponse.json(products, {
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
 }
 
 export async function POST(request: Request) {

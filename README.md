@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Staff operations portal
+
+Staff sign in at `/agent`. Configure `AGENT_EMAIL` and `AGENT_PASSWORD` on the server to provision the staff account. The portal can coordinate order dispatch, contact active vendors, and assign approved riders; admin credentials and catalog management remain separate. Staff sessions are signed with `ADMIN_SESSION_SECRET` and expire after eight hours.
+
+## Product options and subcategories
+
+To save product subcategories and custom sizes or varieties, apply the updated `supabase/catalog-products.sql` in the Supabase SQL editor. Admins can then add subcategories and named options with individual prices from the Products section. Custom options replace the automatic grocery size suggestions for that product.
+
 ## Getting Started
 
 First, run the development server:

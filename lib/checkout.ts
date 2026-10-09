@@ -1,4 +1,5 @@
 import { calculateDeliveryQuote, deliveryPricing } from "@/lib/delivery-pricing";
+import { getGrocerySizeOptions } from "@/lib/grocery-size-options";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
@@ -10,12 +11,13 @@ export class CheckoutError extends Error {
   }
 }
 
-export type CheckoutInputItem = { id: string; name: string; quantity: number };
+export type CheckoutInputItem = { id: string; name: string; quantity: number; vendorId?: number };
 export type PricedCheckoutItem = CheckoutInputItem & { price: number; isMeal: boolean };
 export type CheckoutQuote = {
   routeDistanceKm: number; vendorCount: number; isEvening: boolean;
   deliveryLatitude: number; deliveryLongitude: number; locationSource: "device" | "address"; resolvedDeliveryLocation?: string;
   pickupVendors: Array<{ id: number; name: string; address: string; latitude: number; longitude: number; itemIds: string[] }>;
+  selectedVendors: Array<{ itemId: string; vendorId: number; vendorName: string }>;
   fees: ReturnType<typeof calculateDeliveryQuote>;
 };
 
@@ -41,7 +43,7 @@ export function verifyCheckoutQuote(token: unknown, address: unknown, area: unkn
   let payload: SignedCheckoutQuote;
   try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SignedCheckoutQuote; } catch { throw new CheckoutError("Your delivery quote expired. Recalculate the charges.", 409); }
   if (!Number.isFinite(payload.issuedAt) || Date.now() - payload.issuedAt > 15 * 60 * 1000 || Date.now() < payload.issuedAt - 60_000) throw new CheckoutError("Your delivery quote expired. Recalculate the charges.", 409);
-  const sameItems = Array.isArray(payload.items) && payload.items.length === items.length && payload.items.every((item, index) => item.id === items[index].id && item.name === items[index].name && item.quantity === items[index].quantity && item.price === items[index].price);
+  const sameItems = Array.isArray(payload.items) && payload.items.length === items.length && payload.items.every((item, index) => item.id === items[index].id && item.name === items[index].name && item.quantity === items[index].quantity && item.price === items[index].price && item.vendorId === items[index].vendorId);
   if (!sameItems || payload.address !== address || payload.area !== area) throw new CheckoutError("Your cart or delivery details changed. Recalculate the delivery charges.", 409);
   return payload.quote;
 }
@@ -103,33 +105,62 @@ function parseMealUnitPrice(meal: { id: number; name: string; price: number; cat
   return price;
 }
 
-export async function priceCheckoutItems(input: unknown): Promise<{ items: PricedCheckoutItem[]; foodSubtotal: number }> {
+export async function priceCheckoutItems(input: unknown, selectedVendorByItem: Record<string, number> = {}): Promise<{ items: PricedCheckoutItem[]; foodSubtotal: number }> {
   if (!Array.isArray(input) || input.length === 0 || input.length > 80) throw new CheckoutError("Your cart is empty or contains too many items.");
   const items = input.map((value) => {
     if (typeof value !== "object" || value === null) throw new CheckoutError("One of the cart items is invalid.");
     const item = value as Record<string, unknown>;
-    if (typeof item.id !== "string" || !item.id || item.id.length > 160 || typeof item.name !== "string" || item.name.length > 300 || !Number.isInteger(item.quantity) || Number(item.quantity) < 1 || Number(item.quantity) > 30) throw new CheckoutError("One of the cart items is invalid.");
-    return { id: item.id, name: item.name, quantity: Number(item.quantity) };
+    if (typeof item.id !== "string" || !item.id || item.id.length > 160 || typeof item.name !== "string" || item.name.length > 300 || !Number.isInteger(item.quantity) || Number(item.quantity) < 1 || Number(item.quantity) > 30 || (item.vendorId !== undefined && item.vendorId !== null && (!Number.isInteger(item.vendorId) || Number(item.vendorId) < 1))) throw new CheckoutError("One of the cart items is invalid.");
+    const vendorId = selectedVendorByItem[item.id] ?? (typeof item.vendorId === "number" ? item.vendorId : undefined);
+    return { id: item.id, name: item.name, quantity: Number(item.quantity), ...(vendorId ? { vendorId } : {}) };
   });
   const mealIds = [...new Set(items.map((item) => /^([0-9]+)(?:-|$)/.exec(item.id)?.[1]).filter((id): id is string => Boolean(id)))];
   const productIds = [...new Set(items.filter((item) => !/^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.id))];
   if (productIds.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))) throw new CheckoutError("A cart product id is invalid.");
-  const [meals, products] = await Promise.all([
+  const loadProducts = async () => {
+    if (!productIds.length) return [];
+    try {
+      return await supabaseAdminRequest<Array<{ id: string; name: string; unit: string; price: number; stock_status: string; variant_options?: Array<{ name: string; price: number }> }>>(`products?id=in.(${productIds.join(",")})&select=id,name,unit,price,stock_status,variant_options`);
+    } catch {
+      const legacyProducts = await supabaseAdminRequest<Array<{ id: string; name: string; unit: string; price: number; stock_status: string }>>(`products?id=in.(${productIds.join(",")})&select=id,name,unit,price,stock_status`);
+      return legacyProducts.map((product) => ({ ...product, variant_options: [] }));
+    }
+  };
+  const selectedMealVendorIds = [...new Set(items.filter((item) => item.vendorId && /^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.vendorId as number))];
+  const [meals, products, mealVendorPrices, activeVendors] = await Promise.all([
     mealIds.length ? supabaseAdminRequest<Array<{ id: number; name: string; price: number; category: string; available: boolean }>>(`meals?id=in.(${mealIds.join(",")})&select=id,name,price,category,available`) : Promise.resolve([]),
-    productIds.length ? supabaseAdminRequest<Array<{ id: string; name: string; unit: string; price: number; stock_status: string }>>(`products?id=in.(${productIds.join(",")})&select=id,name,unit,price,stock_status`) : Promise.resolve([]),
+    loadProducts(),
+    mealIds.length && selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&vendor_id=in.(${selectedMealVendorIds.join(",")})&select=vendor_id,meal_id,price`) : Promise.resolve([]),
+    selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ id: number; active: boolean }>>(`vendors?id=in.(${selectedMealVendorIds.join(",")})&active=eq.true&select=id,active`) : Promise.resolve([]),
   ]);
   const mealById = new Map(meals.map((meal) => [String(meal.id), meal]));
   const productById = new Map(products.map((product) => [product.id, product]));
+  const vendorPriceByMeal = new Map(mealVendorPrices.map((assignment) => [`${assignment.vendor_id}:${assignment.meal_id}`, assignment.price]));
+  const activeVendorIds = new Set(activeVendors.map((vendor) => vendor.id));
   const pricedItems = items.map((item) => {
     const mealId = /^([0-9]+)(?:-|$)/.exec(item.id)?.[1];
     if (mealId) {
       const meal = mealById.get(mealId);
       if (!meal || !meal.available) throw new CheckoutError(`${meal?.name || "A meal in your cart"} is no longer available.`, 409);
-      return { ...item, price: parseMealUnitPrice(meal, item), name: item.name, isMeal: true };
+      let vendorPrice = meal.price;
+      if (item.vendorId) {
+        const assignmentPrice = vendorPriceByMeal.get(`${item.vendorId}:${meal.id}`);
+        if (!activeVendorIds.has(item.vendorId) || assignmentPrice === undefined) throw new CheckoutError(`That vendor is no longer available for ${meal.name}. Please choose another vendor.`, 409);
+        vendorPrice = assignmentPrice === null ? meal.price : Number(assignmentPrice);
+      }
+      return { ...item, price: parseMealUnitPrice({ ...meal, price: vendorPrice }, item), name: item.name, isMeal: true };
     }
     const product = productById.get(item.id);
     if (!product || product.stock_status === "unavailable") throw new CheckoutError(`${product?.name || "A product in your cart"} is no longer available.`, 409);
-    return { ...item, name: `${product.name} (${product.unit})`, price: Number(product.price), isMeal: false };
+    const variants = Array.isArray(product.variant_options) ? product.variant_options : [];
+    if (variants.length > 0) {
+      const selectedVariant = variants.find((variant) => variant && typeof variant.name === "string" && variant.name.trim().length > 0 && Number.isFinite(Number(variant.price)) && Number(variant.price) >= 0 && item.name === `${product.name} (${variant.name})`);
+      if (!selectedVariant) throw new CheckoutError(`Choose a valid size or variety for ${product.name} again.`, 409);
+      return { ...item, name: `${product.name} (${selectedVariant.name})`, price: Number(selectedVariant.price), isMeal: false };
+    }
+    const selectedSize = getGrocerySizeOptions(product.name, product.unit, Number(product.price)).find((option) => item.name === `${product.name} (${option.unit})`);
+    if (!selectedSize) throw new CheckoutError(`Choose a valid size for ${product.name} again.`, 409);
+    return { ...item, name: `${product.name} (${selectedSize.unit})`, price: selectedSize.price, isMeal: false };
   });
   return { items: pricedItems, foodSubtotal: pricedItems.reduce((total, item) => total + item.price * item.quantity, 0) };
 }
@@ -141,7 +172,11 @@ function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: numb
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function itemAssignmentKey(id: string) {
+function itemAssignmentKey(item: PricedCheckoutItem) {
+  return `${item.id}:vendor:${item.vendorId ?? "nearest"}`;
+}
+
+function assignmentLookupKey(id: string) {
   const mealId = /^([0-9]+)(?:-|$)/.exec(id)?.[1];
   return mealId ? `meal:${mealId}` : `product:${id}`;
 }
@@ -192,7 +227,7 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const { isEvening } = assertOrderingAvailable();
   const deliveryLocation = await resolveDeliveryLocation(input);
   const { latitude, longitude } = deliveryLocation;
-  const uniqueItems = [...new Map(input.items.map((item) => [itemAssignmentKey(item.id), item])).values()];
+  const uniqueItems = [...new Map(input.items.map((item) => [itemAssignmentKey(item), item])).values()];
   const mealIds = [...new Set(uniqueItems.map((item) => /^([0-9]+)(?:-|$)/.exec(item.id)?.[1]).filter((id): id is string => Boolean(id)))];
   const productIds = uniqueItems.filter((item) => !/^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.id);
   const [mealAssignments, productAssignments] = await Promise.all([
@@ -208,17 +243,18 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const eligible = vendors.filter((vendor) => validCoordinate(vendor.latitude, -90, 90) && validCoordinate(vendor.longitude, -180, 180));
   const selectedByItem = new Map<string, number>();
   for (const item of uniqueItems) {
-    const key = itemAssignmentKey(item.id);
-    const candidates = eligible.filter((vendor) => assignmentsByItem.get(key)?.has(vendor.id));
+    const key = itemAssignmentKey(item);
+    const assignedVendors = assignmentsByItem.get(assignmentLookupKey(item.id));
+    const candidates = eligible.filter((vendor) => assignedVendors?.has(vendor.id) && (!item.vendorId || item.vendorId === vendor.id));
     if (!candidates.length) throw new CheckoutError("We couldn’t prepare delivery pricing for this cart yet. Please try again shortly.", 409);
     candidates.sort((a, b) => distanceKm(latitude, longitude, a.latitude as number, a.longitude as number) - distanceKm(latitude, longitude, b.latitude as number, b.longitude as number) || a.id - b.id);
     selectedByItem.set(key, candidates[0].id);
   }
   const selectedIds = new Set(selectedByItem.values());
-  const selectedVendors = eligible.filter((vendor) => selectedIds.has(vendor.id)).sort((a, b) => distanceKm(latitude, longitude, b.latitude as number, b.longitude as number) - distanceKm(latitude, longitude, a.latitude as number, a.longitude as number) || a.id - b.id);
+  const pickupVendorList = eligible.filter((vendor) => selectedIds.has(vendor.id)).sort((a, b) => distanceKm(latitude, longitude, b.latitude as number, b.longitude as number) - distanceKm(latitude, longitude, a.latitude as number, a.longitude as number) || a.id - b.id);
   const openRouteServiceKey = process.env.OPENROUTESERVICE_API_KEY;
   if (!openRouteServiceKey) throw new CheckoutError("Route pricing is not configured yet. Add the HeiGIT route API key to the server configuration.", 503);
-  const routeCoordinates = [selectedVendors[0], ...selectedVendors.slice(1), { latitude, longitude }]
+  const routeCoordinates = [pickupVendorList[0], ...pickupVendorList.slice(1), { latitude, longitude }]
     .map((point) => [point.longitude, point.latitude]);
   const routeResponse = await fetch("https://api.heigit.org/openrouteservice/v2/directions/driving-car", {
     method: "POST",
@@ -231,11 +267,16 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const distanceMeters = routeData.routes?.[0]?.summary?.distance;
   if (typeof distanceMeters !== "number" || !Number.isFinite(distanceMeters)) throw new CheckoutError("We could not calculate the delivery route. Please try again.", 502);
   const routeDistanceKm = Math.round((distanceMeters / 1000) * 10) / 10;
-  const fees = calculateDeliveryQuote({ routeDistanceKm, vendorCount: selectedVendors.length, isEvening });
-  const pickupVendors = selectedVendors.map((vendor) => ({
+  const fees = calculateDeliveryQuote({ routeDistanceKm, vendorCount: pickupVendorList.length, isEvening });
+  const pickupVendors = pickupVendorList.map((vendor) => ({
     id: vendor.id, name: vendor.name, address: vendor.address, latitude: vendor.latitude as number, longitude: vendor.longitude as number,
-    itemIds: uniqueItems.filter((item) => selectedByItem.get(itemAssignmentKey(item.id)) === vendor.id).map((item) => item.id),
+    itemIds: uniqueItems.filter((item) => selectedByItem.get(itemAssignmentKey(item)) === vendor.id).map((item) => item.id),
   }));
+  const itemVendorSelections = uniqueItems.map((item) => {
+    const vendorId = selectedByItem.get(itemAssignmentKey(item));
+    const vendor = eligible.find((candidate) => candidate.id === vendorId);
+    return { itemId: item.id, vendorId: vendorId as number, vendorName: vendor?.name ?? "" };
+  });
   const foodSubtotal = input.items.reduce((total, item) => total + item.price * item.quantity, 0);
-  return { routeDistanceKm, vendorCount: pickupVendors.length, isEvening, pickupVendors, fees, deliveryLatitude: latitude, deliveryLongitude: longitude, locationSource: deliveryLocation.locationSource, ...("resolvedDeliveryLocation" in deliveryLocation ? { resolvedDeliveryLocation: deliveryLocation.resolvedDeliveryLocation } : {}), foodSubtotal, totalAmount: foodSubtotal + fees.totalDeliveryCharges };
+  return { routeDistanceKm, vendorCount: pickupVendors.length, isEvening, pickupVendors, selectedVendors: itemVendorSelections, fees, deliveryLatitude: latitude, deliveryLongitude: longitude, locationSource: deliveryLocation.locationSource, ...( "resolvedDeliveryLocation" in deliveryLocation ? { resolvedDeliveryLocation: deliveryLocation.resolvedDeliveryLocation } : {}), foodSubtotal, totalAmount: foodSubtotal + fees.totalDeliveryCharges };
 }

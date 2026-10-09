@@ -1,222 +1,62 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedRider } from "@/lib/rider-auth";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 
-const RIDER_STATUSES = [
-  "rider_assigned",
-  "pickup_in_progress",
-  "items_collected",
-  "out_for_delivery",
-  "delivered",
-  "exception",
-] as const;
+const riderStatuses = ["pickup_in_progress", "items_collected", "out_for_delivery", "delivered", "exception"] as const;
+type RouteContext = { params: Promise<{ id: string }> };
 
-type RiderStatus = (typeof RIDER_STATUSES)[number];
-
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
-/*
- * GET
- *
- * /api/rider/orders/[id]?riderId=1
- */
-export async function GET(
-  request: Request,
-  { params }: RouteContext
-) {
+export async function GET(_request: Request, { params }: RouteContext) {
   try {
+    const rider = await getAuthenticatedRider();
+    if (!rider) return NextResponse.json({ error: "Please sign in with an approved rider account." }, { status: 401 });
     const { id } = await params;
-
-    const { searchParams } = new URL(request.url);
-    const riderId = searchParams.get("riderId");
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Order ID is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!riderId) {
-      return NextResponse.json(
-        { error: "Rider ID is required" },
-        { status: 400 }
-      );
-    }
-
-    const orders = await supabaseAdminRequest<
-      Array<Record<string, unknown>>
-    >(
-      `orders?id=eq.${encodeURIComponent(
-        id
-      )}&rider_id=eq.${encodeURIComponent(riderId)}&limit=1`
-    );
-
-    if (!orders || orders.length === 0) {
-      return NextResponse.json(
-        { error: "Order not found or not assigned to this rider" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      order: orders[0],
-    });
+    if (!id) return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
+    const [order] = await supabaseAdminRequest<Array<Record<string, unknown>>>(`orders?id=eq.${encodeURIComponent(id)}&rider_id=eq.${rider.id}&limit=1`);
+    if (!order) return NextResponse.json({ error: "Order not found or not assigned to this rider" }, { status: 404 });
+    return NextResponse.json({ order }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Rider order GET failed:", error);
-
-    return NextResponse.json(
-      { error: "Failed to load rider order" },
-      { status: 500 }
-    );
+    console.error("Rider order GET failed", error);
+    return NextResponse.json({ error: "Failed to load rider order" }, { status: 500 });
   }
 }
 
-/*
- * PATCH
- *
- * Changes the delivery status of an order.
- *
- * Body:
- *
- * {
- *   riderId: 1,
- *   status: "pickup_in_progress"
- * }
- */
-export async function PATCH(
-  request: Request,
-  { params }: RouteContext
-) {
+export async function PATCH(request: Request, { params }: RouteContext) {
   try {
+    const rider = await getAuthenticatedRider();
+    if (!rider) return NextResponse.json({ error: "Please sign in with an approved rider account." }, { status: 401 });
     const { id } = await params;
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Order ID is required" },
-        { status: 400 }
-      );
+    if (!id) return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
+    const body = await request.json().catch(() => null) as { status?: unknown } | null;
+    const status = body?.status;
+    if (typeof status !== "string" || !riderStatuses.includes(status as (typeof riderStatuses)[number])) {
+      return NextResponse.json({ error: "Invalid rider status" }, { status: 400 });
     }
 
-    const body = await request.json();
-
-    const riderId = body?.riderId;
-    const status = body?.status as RiderStatus;
-
-    if (!riderId) {
-      return NextResponse.json(
-        { error: "Rider ID is required" },
-        { status: 400 }
-      );
+    const [existingOrder] = await supabaseAdminRequest<Array<{ id: number; status: string }>>(`orders?id=eq.${encodeURIComponent(id)}&rider_id=eq.${rider.id}&select=id,status&limit=1`);
+    if (!existingOrder) return NextResponse.json({ error: "Order not found or not assigned to this rider" }, { status: 404 });
+    const allowedNextStatus: Record<string, string[]> = {
+      rider_assigned: ["pickup_in_progress", "exception"],
+      pickup_in_progress: ["items_collected", "exception"],
+      items_collected: ["out_for_delivery", "exception"],
+      out_for_delivery: ["delivered", "exception"],
+      exception: ["pickup_in_progress", "items_collected", "out_for_delivery", "delivered"],
+    };
+    if (!allowedNextStatus[existingOrder.status]?.includes(status)) {
+      return NextResponse.json({ error: "That delivery status change is not allowed." }, { status: 409 });
     }
 
-    if (!status || !RIDER_STATUSES.includes(status)) {
-      return NextResponse.json(
-        {
-          error: "Invalid rider status",
-          allowedStatuses: RIDER_STATUSES,
-        },
-        { status: 400 }
-      );
-    }
-
-    /*
-     * Make sure this order belongs to this rider.
-     */
-    const existingOrders =
-      await supabaseAdminRequest<
-        Array<Record<string, unknown>>
-      >(
-        `orders?id=eq.${encodeURIComponent(
-          id
-        )}&rider_id=eq.${encodeURIComponent(
-          riderId
-        )}&limit=1`
-      );
-
-    if (
-      !existingOrders ||
-      existingOrders.length === 0
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Order not found or not assigned to this rider",
-        },
-        { status: 404 }
-      );
-    }
-
-    const updatedOrders =
-      await supabaseAdminRequest<
-        Array<Record<string, unknown>>
-      >(
-        `orders?id=eq.${encodeURIComponent(id)}&rider_id=eq.${encodeURIComponent(
-          riderId
-        )}`,
-        {
-          method: "PATCH",
-          headers: {
-            Prefer: "return=representation",
-          },
-          body: JSON.stringify({
-            status,
-          }),
-        }
-      );
-
-    if (
-      !updatedOrders ||
-      updatedOrders.length === 0
-    ) {
-      return NextResponse.json(
-        {
-          error: "Order could not be updated",
-        },
-        { status: 500 }
-      );
-    }
-
-    /*
-     * If the rider has completed the delivery,
-     * make the rider available again.
-     */
-    if (status === "delivered") {
-      try {
-        await supabaseAdminRequest(
-          `riders?id=eq.${encodeURIComponent(riderId)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              availability: "available",
-            }),
-          }
-        );
-      } catch (riderError) {
-        console.error(
-          "Could not free rider after delivery:",
-          riderError
-        );
-      }
-    }
-
-    return NextResponse.json({
-      order: updatedOrders[0],
+    const [order] = await supabaseAdminRequest<Array<Record<string, unknown>>>(`orders?id=eq.${encodeURIComponent(id)}&rider_id=eq.${rider.id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ status }),
     });
+    if (!order) return NextResponse.json({ error: "Order could not be updated" }, { status: 500 });
+    if (status === "delivered") {
+      await supabaseAdminRequest(`riders?id=eq.${rider.id}`, { method: "PATCH", body: JSON.stringify({ availability: "available" }) });
+    }
+    return NextResponse.json({ order });
   } catch (error) {
-    console.error(
-      "Rider order PATCH failed:",
-      error
-    );
-
-    return NextResponse.json(
-      {
-        error: "Failed to update rider order",
-      },
-      { status: 500 }
-    );
+    console.error("Rider order PATCH failed", error);
+    return NextResponse.json({ error: "Failed to update rider order" }, { status: 500 });
   }
 }

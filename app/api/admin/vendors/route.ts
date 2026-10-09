@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { adminCookieName, isValidAdminSession } from "@/lib/admin-auth";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 
-type VendorPayload = { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; notes?: unknown; active?: unknown; productIds?: unknown; mealIds?: unknown };
+type VendorPayload = { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; notes?: unknown; active?: unknown; productIds?: unknown; mealIds?: unknown; mealPrices?: unknown };
 
 async function requireAdmin() {
   return isValidAdminSession((await cookies()).get(adminCookieName)?.value);
@@ -29,6 +29,22 @@ function mealIds(body: VendorPayload) {
   return Array.isArray(body.mealIds) ? body.mealIds.filter((id): id is number => typeof id === "number" && Number.isInteger(id)) : [];
 }
 
+function mealPrices(body: VendorPayload) {
+  if (typeof body.mealPrices !== "object" || body.mealPrices === null || Array.isArray(body.mealPrices)) return {};
+  const prices: Record<number, number | null> = {};
+  for (const [id, price] of Object.entries(body.mealPrices)) {
+    const mealId = Number(id);
+    if (!Number.isInteger(mealId) || mealId < 1) continue;
+    if (price === null || price === "") {
+      prices[mealId] = null;
+      continue;
+    }
+    const amount = Number(price);
+    if (Number.isFinite(amount) && amount >= 0) prices[mealId] = amount;
+  }
+  return prices;
+}
+
 async function replaceProducts(vendorId: number, ids: string[]) {
   await supabaseAdminRequest(`vendor_products?vendor_id=eq.${vendorId}`, { method: "DELETE" });
   if (ids.length > 0) {
@@ -36,9 +52,9 @@ async function replaceProducts(vendorId: number, ids: string[]) {
   }
 }
 
-async function replaceMeals(vendorId: number, ids: number[]) {
+async function replaceMeals(vendorId: number, ids: number[], prices: Record<number, number | null>) {
   await supabaseAdminRequest(`vendor_meals?vendor_id=eq.${vendorId}`, { method: "DELETE" });
-  if (ids.length > 0) await supabaseAdminRequest("vendor_meals", { method: "POST", body: JSON.stringify(ids.map((meal_id) => ({ vendor_id: vendorId, meal_id }))) });
+  if (ids.length > 0) await supabaseAdminRequest("vendor_meals", { method: "POST", body: JSON.stringify(ids.map((meal_id) => ({ vendor_id: vendorId, meal_id, price: prices[meal_id] ?? null }))) });
 }
 
 function errorMessage(error: unknown) {
@@ -51,9 +67,12 @@ export async function GET() {
     const [vendors, assignments, mealAssignments] = await Promise.all([
       supabaseAdminRequest<Array<Record<string, unknown>>>("vendors?select=*&order=name.asc"),
       supabaseAdminRequest<Array<{ vendor_id: number; product_id: string }>>("vendor_products?select=vendor_id,product_id"),
-      supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number }>>("vendor_meals?select=vendor_id,meal_id"),
+      supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null }>>("vendor_meals?select=vendor_id,meal_id,price"),
     ]);
-    return NextResponse.json(vendors.map((vendor) => ({ ...vendor, productIds: assignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => assignment.product_id), mealIds: mealAssignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => assignment.meal_id) })));
+    return NextResponse.json(vendors.map((vendor) => {
+      const vendorMeals = mealAssignments.filter((assignment) => assignment.vendor_id === vendor.id);
+      return { ...vendor, productIds: assignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => assignment.product_id), mealIds: vendorMeals.map((assignment) => assignment.meal_id), mealPrices: Object.fromEntries(vendorMeals.map((assignment) => [assignment.meal_id, assignment.price])) };
+    }));
   } catch (error) {
     console.error("Vendor list request failed", error);
     return NextResponse.json({ error: `Could not load vendor services: ${errorMessage(error)}` }, { status: 500 });
@@ -70,8 +89,8 @@ export async function POST(request: Request) {
     const [vendor] = await supabaseAdminRequest<Array<{ id: number }>>("vendors", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(fields) });
     vendorId = vendor.id;
     await replaceProducts(vendor.id, productIds(body));
-    await replaceMeals(vendor.id, mealIds(body));
-    return NextResponse.json({ ...vendor, ...fields, productIds: productIds(body), mealIds: mealIds(body) });
+    await replaceMeals(vendor.id, mealIds(body), mealPrices(body));
+    return NextResponse.json({ ...vendor, ...fields, productIds: productIds(body), mealIds: mealIds(body), mealPrices: mealPrices(body) });
   } catch (error) {
     if (vendorId !== undefined) await supabaseAdminRequest(`vendors?id=eq.${vendorId}`, { method: "DELETE" }).catch((rollbackError) => console.error("Could not roll back incomplete vendor save", rollbackError));
     console.error("Vendor create request failed", error);
@@ -88,8 +107,8 @@ export async function PATCH(request: Request) {
     const fields = vendorFields(body);
     const [vendor] = Object.keys(fields).length > 0 ? await supabaseAdminRequest<Array<Record<string, unknown>>>(`vendors?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(fields) }) : [{}];
     if (Array.isArray(body.productIds)) await replaceProducts(id, productIds(body));
-    if (Array.isArray(body.mealIds)) await replaceMeals(id, mealIds(body));
-    return NextResponse.json({ ...vendor, productIds: Array.isArray(body.productIds) ? productIds(body) : undefined, mealIds: Array.isArray(body.mealIds) ? mealIds(body) : undefined });
+    if (Array.isArray(body.mealIds)) await replaceMeals(id, mealIds(body), mealPrices(body));
+    return NextResponse.json({ ...vendor, productIds: Array.isArray(body.productIds) ? productIds(body) : undefined, mealIds: Array.isArray(body.mealIds) ? mealIds(body) : undefined, mealPrices: Array.isArray(body.mealIds) ? mealPrices(body) : undefined });
   } catch (error) {
     console.error("Vendor update request failed", error);
     return NextResponse.json({ error: `Vendor services could not be saved: ${errorMessage(error)}` }, { status: 500 });

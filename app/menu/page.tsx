@@ -51,12 +51,18 @@ const dishIds: Record<string, number> = {
   "Abáchà": 16,
 };
 
-const categoryNames = {
+const defaultCategoryNames: Record<string, string> = {
   "soup-swallow": "Soup and Swallow",
   meat: "Meat",
   rice: "Rice",
   dessert: "Dessert",
-} as const;
+};
+
+const categoryLabel = (category: string) => defaultCategoryNames[category] ?? category
+  .split(/[-_\s]+/)
+  .filter(Boolean)
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(" ");
 
 export default async function MenuPage({
   searchParams,
@@ -95,6 +101,7 @@ export default async function MenuPage({
     // Ratings appear after the customer reviews table is installed.
   }
 
+  const categoryNames = Object.fromEntries(menuDishes.map((dish) => [dish[4], categoryLabel(dish[4])]));
   const categoryDishes = category && category in categoryNames
     ? menuDishes.filter((dish) => dish[4] === category)
     : menuDishes;
@@ -106,7 +113,7 @@ export default async function MenuPage({
   const title = category && category in categoryNames
     ? categoryNames[category as keyof typeof categoryNames]
     : "Full Menu";
-  const categoryLinks = Object.entries(categoryNames);
+  const categoryLinks = Object.entries(categoryNames).sort((a, b) => a[1].localeCompare(b[1]));
   return (
     <main className="min-h-screen bg-green-50 text-gray-900">
       <header className="bg-white border-b border-green-100">
@@ -139,7 +146,7 @@ export default async function MenuPage({
             All dishes
           </Link>
           {categoryLinks.map(([value, label]) => (
-            <Link key={value} href={`/menu?category=${value}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`rounded-xl border px-3 py-3 text-center text-sm font-semibold ${category === value ? "border-green-600 bg-green-600 text-white" : "border-green-100 bg-white text-green-900 hover:bg-green-50"}`}>
+            <Link key={value} href={`/menu?category=${encodeURIComponent(value)}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`rounded-xl border px-3 py-3 text-center text-sm font-semibold ${category === value ? "border-green-600 bg-green-600 text-white" : "border-green-100 bg-white text-green-900 hover:bg-green-50"}`}>
               {label}
             </Link>
           ))}

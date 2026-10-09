@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 import { cookies } from "next/headers";
-import { adminCookieName, isValidAdminSession } from "@/lib/admin-auth";
+import { adminCookieName, agentCookieName, isValidAdminSession, isValidAgentSession } from "@/lib/admin-auth";
 import { customerCookieName, readCustomerSession } from "@/lib/customer-auth";
 import { randomUUID } from "node:crypto";
 import { CheckoutError, verifyCheckoutQuote, priceCheckoutItems } from "@/lib/checkout";
@@ -152,9 +152,13 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const session = (await cookies()).get(adminCookieName)?.value;
+  const cookieStore = await cookies();
+  const adminSession = cookieStore.get(adminCookieName)?.value;
+  const agentSession = cookieStore.get(agentCookieName)?.value;
+  const isAgent = isValidAgentSession(agentSession);
+  const isAdmin = !isAgent && isValidAdminSession(adminSession);
 
-  if (!isValidAdminSession(session)) {
+  if (!isAdmin && !isAgent) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -169,6 +173,29 @@ export async function GET() {
         "order_events?select=*&order=created_at.desc"
       );
 
+    if (isAgent) {
+      const items = await supabaseAdminRequest<Array<Record<string, unknown>>>(
+        "order_items?select=id,order_id,product_name,quantity&order=order_id.asc"
+      );
+      return NextResponse.json(orders.map((order) => ({
+        id: order.id,
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
+        delivery_address: order.delivery_address,
+        delivery_area: order.delivery_area,
+        pickup_vendors: order.pickup_vendors,
+        status: order.status,
+        rider_id: order.rider_id,
+        rider_name: order.rider_name,
+        rider_phone: order.rider_phone,
+        attention_reason: order.attention_reason,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+        items: items.filter((item) => item.order_id === order.id),
+        events: events.filter((event) => event.order_id === order.id),
+      })));
+    }
+
     return NextResponse.json(
       orders.map((order) => ({
         ...order,
@@ -176,14 +203,37 @@ export async function GET() {
       }))
     );
   } catch {
+    if (isAgent) {
+      return NextResponse.json(orders.map((order) => ({
+        id: order.id,
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
+        delivery_address: order.delivery_address,
+        delivery_area: order.delivery_area,
+        pickup_vendors: order.pickup_vendors,
+        status: order.status,
+        rider_id: order.rider_id,
+        rider_name: order.rider_name,
+        rider_phone: order.rider_phone,
+        attention_reason: order.attention_reason,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+        items: [],
+        events: [],
+      })));
+    }
     return NextResponse.json(orders);
   }
 }
 
 export async function PATCH(request: Request) {
-  const session = (await cookies()).get(adminCookieName)?.value;
+  const cookieStore = await cookies();
+  const adminSession = cookieStore.get(adminCookieName)?.value;
+  const agentSession = cookieStore.get(agentCookieName)?.value;
+  const isAgent = isValidAgentSession(agentSession);
+  const isAdmin = !isAgent && isValidAdminSession(adminSession);
 
-  if (!isValidAdminSession(session)) {
+  if (!isAdmin && !isAgent) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -200,6 +250,28 @@ export async function PATCH(request: Request) {
   };
 
   const id = typeof body.id === "number" ? body.id : null;
+
+  if (isAgent) {
+    const allowedKeys = new Set(["id", "status", "riderId", "eventType", "note"]);
+    const allowedStatuses = new Set<OrderStatus>([
+      "vendor_confirmation",
+      "vendors_confirmed",
+      "rider_assigned",
+      "pickup_in_progress",
+      "items_collected",
+      "out_for_delivery",
+      "delivered",
+    ]);
+    if (
+      Object.keys(body).some((key) => !allowedKeys.has(key)) ||
+      (body.status !== undefined && (typeof body.status !== "string" || !allowedStatuses.has(body.status as OrderStatus))) ||
+      (body.riderId !== undefined && body.riderId !== null && typeof body.riderId !== "number") ||
+      (body.eventType !== undefined && (typeof body.eventType !== "string" || body.eventType.length > 80)) ||
+      (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 500))
+    ) {
+      return NextResponse.json({ error: "Staff can only update dispatch status and rider assignment." }, { status: 403 });
+    }
+  }
 
   const status =
     typeof body.status === "string"
@@ -332,14 +404,15 @@ export async function PATCH(request: Request) {
        */
       const riders =
         await supabaseAdminRequest<
-          Array<{
+            Array<{
             id: number;
             name: string;
             phone: string;
             availability: "available" | "busy" | "offline";
+            account_status?: string;
           }>
         >(
-          `riders?id=eq.${newRiderId}&select=id,name,phone,availability`
+          `riders?id=eq.${newRiderId}&select=id,name,phone,availability,account_status`
         );
 
       const newRider = riders[0];
@@ -349,6 +422,10 @@ export async function PATCH(request: Request) {
           { error: "Rider not found" },
           { status: 404 }
         );
+      }
+
+      if (isAgent && newRider.account_status !== "approved") {
+        return NextResponse.json({ error: "Only approved riders can be assigned by staff." }, { status: 403 });
       }
 
       /*

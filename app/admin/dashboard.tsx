@@ -56,20 +56,24 @@ const orderStatuses = [
 
 type OrderStatus = (typeof orderStatuses)[number][0];
 
+type ProductVariant = { name: string; price: number };
+
 type Product = {
   id: string;
   name: string;
   description: string;
   category: string;
+  subcategory: string;
   section: "foodstuff" | "fresh-food";
   unit: string;
   price: number;
   image: string;
   stock_status: "in_stock" | "limited" | "unavailable";
+  variant_options: ProductVariant[];
 };
 
-type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[] };
-type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; last_location_at?: string | null };
+type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null> };
+type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; account_status: "pending" | "approved" | "suspended"; last_location_at?: string | null };
 
 export default function AdminDashboard({
   adminEmail,
@@ -86,6 +90,8 @@ export default function AdminDashboard({
   const [isLoadingMeals, setIsLoadingMeals] = useState(true);
   const [mealError, setMealError] = useState("");
   const [savingMealId, setSavingMealId] = useState<number | null>(null);
+  const [isCreatingMeal, setIsCreatingMeal] = useState(false);
+  const [newMeal, setNewMeal] = useState<Omit<Meal, "id">>({ name: "", description: "", price: 0, category: "", image: "", available: true });
 
   const [pendingAvailability, setPendingAvailability] = useState<
     Record<number, boolean>
@@ -103,30 +109,38 @@ export default function AdminDashboard({
   const [attentionDrafts, setAttentionDrafts] = useState<Record<number, string>>({});
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [productSectionView, setProductSectionView] = useState<Product["section"]>("foodstuff");
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [productError, setProductError] = useState("");
+  const [productSavedMessage, setProductSavedMessage] = useState("");
   const [savingProductId, setSavingProductId] = useState<string | null>(null);
+  const [savingAllProducts, setSavingAllProducts] = useState(false);
+  const [deletingProductCategory, setDeletingProductCategory] = useState<string | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorError, setVendorError] = useState("");
   const [vendorSavedMessage, setVendorSavedMessage] = useState("");
   const [savingVendorId, setSavingVendorId] = useState<number | "new" | null>(null);
-  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [] });
+  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [], mealPrices: {} });
   const [riders, setRiders] = useState<Rider[]>([]);
   const [riderError, setRiderError] = useState("");
   const [savingRiderId, setSavingRiderId] = useState<number | "new" | null>(null);
-  const [newRider, setNewRider] = useState<Omit<Rider, "id" | "last_location_at">>({ name: "", phone: "", base_area: "", availability: "available" });
+  const [newRider, setNewRider] = useState<Omit<Rider, "id" | "last_location_at">>({ name: "", phone: "", base_area: "", availability: "offline", account_status: "pending" });
 
   const [newProduct, setNewProduct] = useState<Product>({
     id: "",
     name: "",
     description: "",
     category: "",
+    subcategory: "",
     section: "foodstuff",
     unit: "",
     price: 0,
     image: "",
     stock_status: "in_stock",
+    variant_options: [],
   });
+  const visibleProducts = products.filter((product) => product.section === productSectionView);
+  const visibleProductCategories = [...new Set(visibleProducts.map((product) => product.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
   /* =========================
      LOAD MEALS
@@ -174,7 +188,11 @@ export default function AdminDashboard({
 
         return response.json() as Promise<Product[]>;
       })
-      .then(setProducts)
+      .then((loadedProducts) => setProducts(loadedProducts.map((product) => ({
+        ...product,
+        subcategory: product.subcategory || "",
+        variant_options: Array.isArray(product.variant_options) ? product.variant_options : [],
+      }))))
       .catch(() =>
         setProductError(
           "Products could not be loaded. Run the catalog SQL in Supabase first."
@@ -285,12 +303,33 @@ export default function AdminDashboard({
     setSavingMealId(null);
   };
 
+  const addMeal = async () => {
+    setMealError("");
+    setIsCreatingMeal(true);
+    try {
+      const response = await fetch("/api/admin/meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMeal),
+      });
+      const result = await response.json() as Meal | { error?: string };
+      if (!response.ok) throw new Error("error" in result ? result.error : "That meal could not be added.");
+      setMeals((current) => [...current, result as Meal].sort((left, right) => left.id - right.id));
+      setNewMeal({ name: "", description: "", price: 0, category: "", image: "", available: true });
+    } catch (error) {
+      setMealError(error instanceof Error ? error.message : "That meal could not be added.");
+    } finally {
+      setIsCreatingMeal(false);
+    }
+  };
+
   /* =========================
      IMAGE UPLOAD
   ========================= */
 
   const uploadImage = async (
-    file: File
+    file: File,
+    onError: (message: string) => void = setProductError
   ): Promise<string | null> => {
     const formData = new FormData();
 
@@ -311,7 +350,7 @@ export default function AdminDashboard({
           // Keep the generic message when the server does not return JSON.
         }
 
-        setProductError(errorMessage);
+        onError(errorMessage);
 
       return null;
     }
@@ -319,6 +358,25 @@ export default function AdminDashboard({
     const data = await response.json();
 
     return data.url as string;
+  };
+
+  const uploadProductImage = async (product: Product, file: File) => {
+    setProductError("");
+    const url = await uploadImage(file);
+    if (!url) return;
+
+    try {
+      const response = await fetch("/api/admin/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: product.id, image: url }),
+      });
+      if (!response.ok) throw new Error("The image uploaded, but could not be saved to this product. Please try Save changes.");
+      setProducts((current) => current.map((item) => item.id === product.id ? { ...item, image: url } : item));
+      setProductSavedMessage(`${product.name} image saved.`);
+    } catch (error) {
+      setProductError(error instanceof Error ? error.message : "The uploaded image could not be saved to this product.");
+    }
   };
 
   /* =========================
@@ -352,6 +410,35 @@ export default function AdminDashboard({
     }
 
     setSavingProductId(null);
+  };
+
+  const saveAllProducts = async () => {
+    setSavingAllProducts(true);
+    setProductError("");
+    setProductSavedMessage("");
+
+    const results = await Promise.all(
+      products.map(async (product) => {
+        try {
+          const response = await fetch("/api/admin/products", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(product),
+          });
+          return { id: product.id, ok: response.ok };
+        } catch {
+          return { id: product.id, ok: false };
+        }
+      })
+    );
+
+    const failedIds = results.filter((result) => !result.ok).map((result) => result.id);
+    if (failedIds.length > 0) {
+      setProductError(`Could not save ${failedIds.length} product${failedIds.length === 1 ? "" : "s"}: ${failedIds.join(", ")}. Try again.`);
+    } else {
+      setProductSavedMessage(`All ${products.length} products saved.`);
+    }
+    setSavingAllProducts(false);
   };
 
   /* =========================
@@ -401,11 +488,13 @@ export default function AdminDashboard({
         name: "",
         description: "",
         category: "",
+        subcategory: "",
         section: "foodstuff",
         unit: "",
         price: 0,
         image: "",
         stock_status: "in_stock",
+        variant_options: [],
       });
     }
 
@@ -445,6 +534,31 @@ export default function AdminDashboard({
     }
   };
 
+  const deleteProductCategory = async (category: string) => {
+    const affectedCount = visibleProducts.filter((product) => product.category.trim() === category).length;
+    const sectionLabel = productSectionView === "foodstuff" ? "Groceries" : "Fresh Food";
+    if (!affectedCount || category.toLowerCase() === "uncategorized") return;
+    if (!window.confirm(`Delete “${category}” from ${sectionLabel}? Its ${affectedCount} product${affectedCount === 1 ? "" : "s"} will be moved to Uncategorized.`)) return;
+
+    setDeletingProductCategory(category);
+    setProductError("");
+    setProductSavedMessage("");
+    try {
+      const params = new URLSearchParams({ section: productSectionView, category });
+      const response = await fetch(`/api/admin/product-categories?${params}`, { method: "DELETE" });
+      const result = await response.json() as { error?: string; productIds?: string[] };
+      if (!response.ok) throw new Error(result.error || "That category could not be removed.");
+
+      const movedIds = new Set(result.productIds || []);
+      setProducts((current) => current.map((product) => movedIds.has(product.id) ? { ...product, category: "Uncategorized" } : product));
+      setProductSavedMessage(`“${category}” was removed. Its ${movedIds.size} product${movedIds.size === 1 ? "" : "s"} moved to Uncategorized.`);
+    } catch (error) {
+      setProductError(error instanceof Error ? error.message : "That category could not be removed.");
+    } finally {
+      setDeletingProductCategory(null);
+    }
+  };
+
   const saveVendor = async (vendor: Vendor | Omit<Vendor, "id">) => {
     const isNew = !("id" in vendor);
     setSavingVendorId(isNew ? "new" : vendor.id);
@@ -459,7 +573,7 @@ export default function AdminDashboard({
         const saved = result as Vendor;
         if (isNew) {
           setVendors((current) => [...current, saved]);
-          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [] });
+          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [], mealPrices: {} });
         } else {
           setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds } : item));
         }
@@ -475,7 +589,7 @@ export default function AdminDashboard({
   const saveRider = async (rider: Rider | Omit<Rider, "id" | "last_location_at">) => {
     const isNew = !("id" in rider);
     setSavingRiderId(isNew ? "new" : rider.id);
-    const response = await fetch("/api/admin/riders", { method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...rider, baseArea: rider.base_area }) });
+    const response = await fetch("/api/admin/riders", { method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...rider, baseArea: rider.base_area, accountStatus: rider.account_status }) });
     if (!response.ok) {
       setRiderError("Rider details could not be saved.");
     } else {
@@ -483,7 +597,7 @@ export default function AdminDashboard({
       const savedRider = saved[0];
       if (isNew) {
         setRiders((current) => [...current, savedRider]);
-        setNewRider({ name: "", phone: "", base_area: "", availability: "available" });
+        setNewRider({ name: "", phone: "", base_area: "", availability: "offline", account_status: "pending" });
       } else {
         setRiders((current) => current.map((item) => item.id === savedRider.id ? savedRider : item));
       }
@@ -564,63 +678,57 @@ const saveOrderOperation = async (
   };
 
   return (
-    <main className="min-h-screen bg-green-50 text-gray-900">
+    <main className="admin-dashboard min-h-screen bg-[#f5f8f2] text-slate-900">
       {/* HEADER */}
 
-      <header className="border-b border-green-100 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-green-600">
-              ChopHub Admin
-            </p>
-
-            <h1 className="text-2xl font-bold text-green-900">
-              Operations dashboard
-            </h1>
+      <header className="border-b border-emerald-100/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-xl text-white shadow-lg shadow-emerald-900/15" aria-hidden="true">✳</div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">ChopHub</p>
+              <h1 className="text-lg font-bold tracking-tight text-slate-900 md:text-xl">Admin workspace</h1>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={signOut}
-            className="rounded-full border border-green-200 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
           >
             Sign out
           </button>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-4 py-10">
+      <section className="mx-auto max-w-7xl px-4 py-7 md:px-8 md:py-10">
         {/* ADMIN INFO */}
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-600">
-            Signed in as {adminEmail}
-          </p>
-
-          <h2 className="mt-1 text-2xl font-bold text-green-900">
-            ChopHub-managed menu
-          </h2>
-
-          <p className="mt-2 text-gray-600">
-            Vendor assignments are kept internal. Customers
-            continue to see one unified ChopHub menu and
-            ordering experience.
-          </p>
+        <div className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-emerald-800 via-emerald-700 to-green-600 p-6 text-white shadow-xl shadow-emerald-950/10 md:p-8">
+          <div className="pointer-events-none absolute -right-8 -top-16 h-64 w-64 rounded-full border-[28px] border-white/10" aria-hidden="true" />
+          <div className="relative max-w-3xl">
+            <p className="text-sm font-medium text-emerald-100">Good to see you · {adminEmail}</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">Your ChopHub, at a glance</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-emerald-50 md:text-base">
+              Keep meals, fresh food, groceries, and deliveries running smoothly from one place.
+            </p>
+          </div>
         </div>
 
         {/* STATISTICS */}
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             [String(meals.length), "Menu items"],
-            [String(products.length), "Grocery products"],
+            [String(products.filter((product) => product.section === "foodstuff").length), "Grocery products"],
+            [String(products.filter((product) => product.section === "fresh-food").length), "Fresh food products"],
             ["1", "Owner account"],
           ].map(([value, label]) => (
             <div
               key={label}
-              className="rounded-2xl bg-white p-5 shadow-sm"
+              className="admin-stat-card rounded-2xl border border-emerald-100/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <p className="text-3xl font-bold text-green-700">
+              <p className="text-3xl font-bold tracking-tight text-emerald-800">
                 {value}
               </p>
 
@@ -633,14 +741,14 @@ const saveOrderOperation = async (
 
         {/* DASHBOARD */}
 
-        <div className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mt-5 overflow-hidden rounded-[1.75rem] border border-emerald-100/80 bg-white p-4 shadow-sm md:p-6">
           {/* NAVIGATION */}
 
-          <div className="flex flex-wrap gap-2 border-b border-green-100 pb-4">
+          <div className="flex gap-2 overflow-x-auto rounded-2xl border border-emerald-100 bg-[#f8faf6] p-2 pb-2">
             {[
               ["menu", "Meals & prices"],
               ["availability", "Availability"],
-              ["products", "Groceries & Fresh Food"],
+              ["products", "Product Catalog"],
               ["vendors", "Vendors"],
               ["riders", "Riders"],
               ["orders", "Operations"],
@@ -653,10 +761,10 @@ const saveOrderOperation = async (
                     value as typeof activeSection
                   )
                 }
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                   activeSection === value
-                    ? "bg-green-600 text-white"
-                    : "bg-green-50 text-green-800 hover:bg-green-100"
+                    ? "bg-emerald-700 text-white shadow-md shadow-emerald-900/15"
+                    : "text-slate-600 hover:bg-white hover:text-emerald-800"
                 }`}
               >
                 {label}
@@ -678,6 +786,24 @@ const saveOrderOperation = async (
                 Edit the customer-facing meal details here.
                 Changes are saved in Supabase.
               </p>
+
+              <div className="mt-4 rounded-xl border border-green-100 bg-green-50/50 p-4">
+                <h3 className="font-semibold text-green-900">Add a meal</h3>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <input value={newMeal.name} onChange={(event) => setNewMeal((current) => ({ ...current, name: event.target.value }))} placeholder="Meal name" className="rounded-lg border border-green-200 px-3 py-2" />
+                  <input value={newMeal.category} onChange={(event) => setNewMeal((current) => ({ ...current, category: event.target.value }))} placeholder="Category (e.g. rice, meat, soup-swallow)" className="rounded-lg border border-green-200 px-3 py-2" />
+                  <label className="text-xs font-semibold text-gray-600 sm:col-span-2">Price (₦)<input type="number" min="0" step="0.01" value={newMeal.price} onChange={(event) => setNewMeal((current) => ({ ...current, price: Number(event.target.value) }))} className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2 text-sm" /></label>
+                  <textarea value={newMeal.description} onChange={(event) => setNewMeal((current) => ({ ...current, description: event.target.value }))} placeholder="Description" className="rounded-lg border border-green-200 px-3 py-2 sm:col-span-2" />
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-semibold text-gray-600">Meal image</label>
+                    <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                      <input value={newMeal.image} onChange={(event) => setNewMeal((current) => ({ ...current, image: event.target.value }))} placeholder="Public image URL or emoji" className="flex-1 rounded-lg border border-green-200 px-3 py-2" />
+                      <label className="cursor-pointer rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-200">Upload image<input type="file" accept="image/*" className="hidden" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; const url = await uploadImage(file, setMealError); if (url) setNewMeal((current) => ({ ...current, image: url })); event.target.value = ""; }} /></label>
+                    </div>
+                  </div>
+                </div>
+                <button type="button" onClick={addMeal} disabled={isCreatingMeal || !newMeal.name.trim() || !newMeal.category.trim()} className="mt-3 rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{isCreatingMeal ? "Adding meal..." : "Add meal"}</button>
+              </div>
 
               {isLoadingMeals && (
                 <p className="mt-4 text-sm text-gray-500">
@@ -733,6 +859,41 @@ const saveOrderOperation = async (
                         }
                       />
 
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Meal image</label>
+                        <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                          <input
+                            className="flex-1 rounded-lg border border-green-200 px-3 py-2"
+                            value={meal.image}
+                            placeholder="Public image URL or emoji"
+                            onChange={(event) => setMeals((current) => current.map((item) => item.id === meal.id ? { ...item, image: event.target.value } : item))}
+                          />
+                          <label className="cursor-pointer rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-200">
+                            Upload Image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0];
+                                if (!file) return;
+                                setMealError("");
+                                const url = await uploadImage(file, setMealError);
+                                if (url) setMeals((current) => current.map((item) => item.id === meal.id ? { ...item, image: url } : item));
+                                event.target.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {meal.image && (
+                          <div className="mt-2">
+                            {/^(https?:\/\/|\/)/i.test(meal.image)
+                              ? <img src={meal.image} alt={`${meal.name} preview`} className="h-20 w-20 rounded-lg object-cover" />
+                              : <span className="text-3xl">{meal.image}</span>}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2">
                         <label className="text-xs font-semibold text-gray-600">
                           Price (₦)
@@ -759,7 +920,9 @@ const saveOrderOperation = async (
                           />
                         </label>
 
-                        <select
+                        <input
+                          aria-label="Meal category"
+                          placeholder="Meal category"
                           className="rounded-lg border border-green-200 px-3 py-2"
                           value={meal.category}
                           onChange={(event) =>
@@ -775,23 +938,7 @@ const saveOrderOperation = async (
                               )
                             )
                           }
-                        >
-                          <option value="soup-swallow">
-                            Soup and Swallow
-                          </option>
-
-                          <option value="meat">
-                            Meat
-                          </option>
-
-                          <option value="rice">
-                            Rice
-                          </option>
-
-                          <option value="dessert">
-                            Dessert
-                          </option>
-                        </select>
+                        />
                       </div>
 
                       <button
@@ -820,17 +967,77 @@ const saveOrderOperation = async (
           {activeSection === "products" && (
             <div className="pt-5">
               <h2 className="text-xl font-bold text-green-900">
-                Groceries & Fresh Food
+                Product Catalog
               </h2>
 
               <p className="mt-1 text-sm text-gray-600">
-                Add or update products, pricing, stock, and
-                the image shown to customers.
+                Manage grocery and fresh food products separately. Changes are saved in Supabase.
               </p>
+
+              <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Product section">
+                {(["foodstuff", "fresh-food"] as const).map((section) => {
+                  const label = section === "foodstuff" ? "Groceries" : "Fresh Food";
+                  const count = products.filter((product) => product.section === section).length;
+                  return (
+                    <button
+                      key={section}
+                      type="button"
+                      role="tab"
+                      aria-selected={productSectionView === section}
+                      onClick={() => {
+                        setProductSectionView(section);
+                        setNewProduct((current) => ({ ...current, section }));
+                      }}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold ${productSectionView === section ? "bg-green-600 text-white" : "bg-green-50 text-green-800 hover:bg-green-100"}`}
+                    >
+                      {label} <span className="ml-1 opacity-80">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <section className="mt-4 rounded-xl border border-green-100 p-4" aria-label={`Manage ${productSectionView === "foodstuff" ? "grocery" : "fresh food"} categories`}>
+                <h3 className="font-semibold text-green-900">Manage categories</h3>
+                <p className="mt-1 text-sm text-gray-600">Deleting a category moves its products to Uncategorized; it never deletes the products.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {visibleProductCategories.map((category) => (
+                    <div key={category} className="flex items-center gap-2 rounded-full border border-green-100 bg-white py-1 pl-3 pr-1">
+                      <span className="text-sm text-green-950">{category}</span>
+                      <button
+                        type="button"
+                        onClick={() => deleteProductCategory(category)}
+                        disabled={category.toLowerCase() === "uncategorized" || deletingProductCategory !== null || savingAllProducts || savingProductId !== null}
+                        aria-label={`Delete ${category} category`}
+                        className="rounded-full px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingProductCategory === category ? "Moving..." : "Delete"}
+                      </button>
+                    </div>
+                  ))}
+                  {visibleProductCategories.length === 0 && <p className="text-sm text-gray-500">No categories yet.</p>}
+                </div>
+              </section>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={saveAllProducts}
+                  disabled={savingAllProducts || deletingProductCategory !== null || savingProductId !== null || products.length === 0}
+                  className="rounded-full bg-green-700 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingAllProducts ? "Saving all products..." : `Save all products (${products.length})`}
+                </button>
+                <span className="text-sm text-gray-600">Saves edits across Groceries and Fresh Food.</span>
+              </div>
 
               {productError && (
                 <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
                   {productError}
+                </p>
+              )}
+              {productSavedMessage && (
+                <p role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">
+                  {productSavedMessage}
                 </p>
               )}
 
@@ -843,13 +1050,15 @@ const saveOrderOperation = async (
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {(
-                    ["id", "name", "category", "unit"] as const
+                    ["id", "name", "category", "subcategory", "unit"] as const
                   ).map((field) => (
                     <input
                       key={field}
                       placeholder={
                         field === "id"
                           ? "Unique ID (e.g. fresh-mango)"
+                          : field === "subcategory"
+                            ? "Subcategory (optional)"
                           : field[0].toUpperCase() +
                             field.slice(1)
                       }
@@ -953,17 +1162,13 @@ const saveOrderOperation = async (
                   <select
                     className="rounded-lg border border-green-200 px-3 py-2"
                     value={newProduct.section}
-                    onChange={(event) =>
-                      setNewProduct({
-                        ...newProduct,
-                        section:
-                          event.target.value as Product["section"],
-                      })
-                    }
+                    onChange={(event) => {
+                      const section = event.target.value as Product["section"];
+                      setNewProduct((current) => ({ ...current, section }));
+                      setProductSectionView(section);
+                    }}
                   >
-                    <option value="foodstuff">
-                      Groceries
-                    </option>
+                    <option value="foodstuff">Groceries</option>
 
                     <option value="fresh-food">
                       Fresh Food
@@ -1010,7 +1215,12 @@ const saveOrderOperation = async (
                       })
                     }
                   />
+
                 </div>
+                <ProductVariantEditor
+                  variants={newProduct.variant_options}
+                  onChange={(variant_options) => setNewProduct((current) => ({ ...current, variant_options }))}
+                />
 
                 <button
                   type="button"
@@ -1034,7 +1244,7 @@ const saveOrderOperation = async (
                 </p>
               ) : (
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {products.map((product) => (
+                  {visibleProducts.map((product) => (
                     <div
                       key={product.id}
                       className="rounded-xl border border-green-100 p-4"
@@ -1101,6 +1311,19 @@ const saveOrderOperation = async (
                                       }
                                     : item
                                 )
+                              )
+                            }
+                          />
+
+                          <input
+                            className="rounded-lg border border-green-200 px-3 py-2"
+                            value={product.subcategory}
+                            placeholder="Subcategory (optional)"
+                            onChange={(event) =>
+                              setProducts((current) =>
+                                current.map((item) => item.id === product.id
+                                  ? { ...item, subcategory: event.target.value }
+                                  : item)
                               )
                             }
                           />
@@ -1185,6 +1408,11 @@ const saveOrderOperation = async (
                           </select>
                         </div>
 
+                        <ProductVariantEditor
+                          variants={product.variant_options}
+                          onChange={(variant_options) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, variant_options } : item))}
+                        />
+
                         {/* EXISTING PRODUCT IMAGE */}
 
                         <div>
@@ -1229,27 +1457,7 @@ const saveOrderOperation = async (
 
                                   if (!file) return;
 
-                                  const url =
-                                    await uploadImage(
-                                      file
-                                    );
-
-                                  if (url) {
-                                    setProducts(
-                                      (current) =>
-                                        current.map(
-                                          (item) =>
-                                            item.id ===
-                                            product.id
-                                              ? {
-                                                  ...item,
-                                                  image:
-                                                    url,
-                                                }
-                                              : item
-                                        )
-                                    );
-                                  }
+                                  await uploadProductImage(product, file);
                                 }}
                               />
                             </label>
@@ -1282,10 +1490,7 @@ const saveOrderOperation = async (
                             onClick={() =>
                               saveProduct(product)
                             }
-                            disabled={
-                              savingProductId ===
-                              product.id
-                            }
+                            disabled={savingAllProducts || deletingProductCategory !== null || savingProductId === product.id}
                             className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                           >
                             {savingProductId ===
@@ -1301,6 +1506,7 @@ const saveOrderOperation = async (
                                 product.id
                               )
                             }
+                            disabled={deletingProductCategory !== null || savingAllProducts}
                             className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700"
                           >
                             Remove
@@ -1309,6 +1515,11 @@ const saveOrderOperation = async (
                       </div>
                     </div>
                   ))}
+                  {visibleProducts.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-green-200 p-6 text-sm text-gray-600 sm:col-span-2">
+                      No {productSectionView === "foodstuff" ? "grocery" : "fresh food"} products yet. Add the first one above.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -1335,6 +1546,7 @@ const saveOrderOperation = async (
             <div className="pt-5">
               <h2 className="text-xl font-bold text-green-900">Rider Directory</h2>
               <p className="mt-1 text-sm text-gray-600">Manage delivery riders, their base area, and whether they are ready for a new delivery.</p>
+              {riders.some((rider) => rider.account_status === "pending") && <p role="status" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">{riders.filter((rider) => rider.account_status === "pending").length} rider account(s) are waiting for approval. Review the account access setting below each rider before approving.</p>}
               {riderError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{riderError}</p>}
               <div className="mt-4 rounded-xl border border-green-100 bg-green-50/50 p-4"><h3 className="font-semibold text-green-900">Add rider</h3><RiderFields rider={newRider} onChange={setNewRider} /><button type="button" onClick={() => saveRider(newRider)} disabled={savingRiderId === "new"} className="mt-3 rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingRiderId === "new" ? "Adding..." : "Add rider"}</button></div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">{riders.map((rider) => <div key={rider.id} className="rounded-xl border border-green-100 p-4"><RiderFields rider={rider} onChange={(next) => setRiders((current) => current.map((item) => item.id === rider.id ? { ...next, id: rider.id } : item))} /><p className="mt-2 text-xs text-gray-500">{rider.last_location_at ? `Last location: ${new Date(rider.last_location_at).toLocaleString()}` : "No live location reported yet"}</p><button type="button" onClick={() => saveRider(rider)} disabled={savingRiderId === rider.id} className="mt-3 rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingRiderId === rider.id ? "Saving..." : "Save rider"}</button></div>)}</div>
@@ -1529,7 +1741,7 @@ const saveOrderOperation = async (
 
                     <div className="mt-4 grid gap-2 sm:grid-cols-2"><a href={`tel:${order.customer_phone}`} className="rounded-lg border border-green-200 px-3 py-2 text-center text-sm font-semibold text-green-800 hover:bg-green-50">Call customer</a><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "vendor_confirmation", "vendor_call_needed", "Vendor confirmation required")} className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Call vendors</button><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "vendors_confirmed", "vendors_confirmed", "All required items confirmed by vendors")} className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Confirm vendors</button><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "pickup_in_progress", "pickup_started", "Rider started vendor pickups")} className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Start pickup</button><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "items_collected", "items_collected", "All items collected from vendors")} className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Items collected</button><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "out_for_delivery", "out_for_delivery", "Rider is heading to the customer")} className="rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Out for delivery</button><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => updateOrderStatus(order, "delivered", "delivered", "Order delivered to customer")} className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Mark delivered</button></div>
                     <div className="mt-4 grid gap-2 rounded-xl bg-green-50/60 p-3 sm:grid-cols-3"><input disabled={Boolean(order.payment_status && order.payment_status !== "paid")} placeholder="Rider name" value={riderDrafts[order.id]?.name ?? order.rider_name ?? ""} onChange={(event) => setRiderDrafts((current) => ({ ...current, [order.id]: { name: event.target.value, phone: current[order.id]?.phone ?? order.rider_phone ?? "" } }))} className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm" /><input disabled={Boolean(order.payment_status && order.payment_status !== "paid")} placeholder="Rider phone" value={riderDrafts[order.id]?.phone ?? order.rider_phone ?? ""} onChange={(event) => setRiderDrafts((current) => ({ ...current, [order.id]: { name: current[order.id]?.name ?? order.rider_name ?? "", phone: event.target.value } }))} className="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm" /><button type="button" disabled={savingOrderId === order.id || Boolean(order.payment_status && order.payment_status !== "paid")} onClick={() => { const rider = riderDrafts[order.id] || { name: order.rider_name || "", phone: order.rider_phone || "" }; saveOrderOperation(order, { riderName: rider.name, riderPhone: rider.phone, status: "rider_assigned" }, "rider_assigned", `Rider assigned: ${rider.name || "Unspecified"}`); }} className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Assign rider</button></div>
-                    <label className="mt-3 block text-sm font-semibold text-green-900">Assign from rider directory<select value={order.rider_id ?? ""} disabled={Boolean(order.payment_status && order.payment_status !== "paid")} onChange={(event) => { const rider = riders.find((item) => item.id === Number(event.target.value)); if (rider) saveOrderOperation(order, { riderId: rider.id, riderName: rider.name, riderPhone: rider.phone, status: "rider_assigned" }, "rider_assigned", `Rider assigned: ${rider.name}`); }} className="mt-1 w-full rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-normal text-gray-800"><option value="">Select available rider</option>{riders.filter((rider) => rider.availability === "available" || rider.id === order.rider_id).map((rider) => <option key={rider.id} value={rider.id}>{rider.name} · {rider.base_area || "No base area"}</option>)}</select></label>
+                    <label className="mt-3 block text-sm font-semibold text-green-900">Assign from rider directory<select value={order.rider_id ?? ""} disabled={Boolean(order.payment_status && order.payment_status !== "paid")} onChange={(event) => { const rider = riders.find((item) => item.id === Number(event.target.value)); if (rider) saveOrderOperation(order, { riderId: rider.id, riderName: rider.name, riderPhone: rider.phone, status: "rider_assigned" }, "rider_assigned", `Rider assigned: ${rider.name}`); }} className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2 text-sm font-normal text-gray-800"><option value="">Select available rider</option>{riders.filter((rider) => rider.availability === "available" || rider.id === order.rider_id).map((rider) => <option key={rider.id} value={rider.id}>{rider.name} · {rider.base_area || "No base area"}</option>)}</select></label>
                     <div className="mt-3 flex gap-2"><input placeholder="Issue or callback note" value={attentionDrafts[order.id] ?? order.attention_reason ?? ""} onChange={(event) => setAttentionDrafts((current) => ({ ...current, [order.id]: event.target.value }))} className="min-w-0 flex-1 rounded-lg border border-red-100 px-3 py-2 text-sm" /><button type="button" disabled={savingOrderId === order.id} onClick={() => { const note = attentionDrafts[order.id] ?? order.attention_reason ?? "Operations issue needs follow-up"; saveOrderOperation(order, { attentionReason: note, status: "exception" }, "attention_needed", note); }} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Flag issue</button></div>
                     {(order.events || []).length > 0 && <div className="mt-4 border-t border-green-100 pt-3"><p className="text-xs font-bold uppercase tracking-wide text-gray-500">Activity</p><div className="mt-2 space-y-1">{order.events?.slice(0, 4).map((event) => <p key={event.id} className="text-xs text-gray-600">{new Date(event.created_at).toLocaleString()} · {event.note || event.event_type}</p>)}</div></div>}
                   </div>
@@ -1575,12 +1787,21 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
         <legend className="px-1 text-sm font-semibold text-green-900">Cooked Food this vendor offers ({vendor.mealIds.length} selected)</legend>
         <div className="max-h-40 space-y-1 overflow-y-auto">
           {meals.length ? meals.map((meal) => (
-            <label key={meal.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1 text-sm font-normal text-gray-800 hover:bg-green-50">
-              <input type="checkbox" checked={vendor.mealIds.includes(meal.id)} onChange={() => toggleMeal(meal.id)} className="mt-0.5" />
-              <span>{meal.category} · {meal.name}</span>
-            </label>
+            <div key={meal.id} className="grid grid-cols-[minmax(0,1fr)_9rem] items-center gap-2 rounded px-2 py-1 hover:bg-green-50">
+              <label className="flex cursor-pointer items-start gap-2 text-sm font-normal text-gray-800">
+                <input type="checkbox" checked={vendor.mealIds.includes(meal.id)} onChange={() => toggleMeal(meal.id)} className="mt-0.5" />
+                <span>{meal.category} · {meal.name}</span>
+              </label>
+              {vendor.mealIds.includes(meal.id) && (
+                <label className="text-xs text-gray-600">
+                  Vendor price (₦)
+                  <input type="number" min="0" step="0.01" aria-label={`${meal.name} vendor price`} placeholder={`Base ₦${meal.price.toLocaleString()}`} value={vendor.mealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...vendor.mealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+                </label>
+              )}
+            </div>
           )) : <p className="text-sm text-gray-500">No cooked meals are available to assign.</p>}
         </div>
+        <p className="mt-2 text-xs text-gray-500">Leave a vendor price blank to use the standard menu price.</p>
       </fieldset>
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
         <legend className="px-1 text-sm font-semibold text-green-900">Groceries & Fresh Food this vendor offers ({vendor.productIds.length} selected)</legend>
@@ -1599,5 +1820,25 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
 }
 
 function RiderFields({ rider, onChange }: { rider: Omit<Rider, "id" | "last_location_at">; onChange: (rider: Omit<Rider, "id" | "last_location_at">) => void }) {
-  return <div className="mt-3 grid gap-2 sm:grid-cols-2"><input placeholder="Rider name" value={rider.name} onChange={(event) => onChange({ ...rider, name: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><input placeholder="Phone number" value={rider.phone} onChange={(event) => onChange({ ...rider, phone: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><input placeholder="Base area" value={rider.base_area} onChange={(event) => onChange({ ...rider, base_area: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><select value={rider.availability} onChange={(event) => onChange({ ...rider, availability: event.target.value as Rider["availability"] })} className="rounded-lg border border-green-200 px-3 py-2"><option value="available">Available</option><option value="busy">Busy</option><option value="offline">Offline</option></select></div>;
+  return <div className="mt-3 grid gap-2 sm:grid-cols-2"><input placeholder="Rider name" value={rider.name} onChange={(event) => onChange({ ...rider, name: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><input placeholder="Phone number" value={rider.phone} onChange={(event) => onChange({ ...rider, phone: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><input placeholder="Base area" value={rider.base_area} onChange={(event) => onChange({ ...rider, base_area: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2" /><select aria-label="Rider availability" value={rider.availability} onChange={(event) => onChange({ ...rider, availability: event.target.value as Rider["availability"] })} className="rounded-lg border border-green-200 px-3 py-2"><option value="available">Available</option><option value="busy">Busy</option><option value="offline">Offline</option></select><label className="text-sm font-semibold text-slate-700 sm:col-span-2">Account access<select aria-label="Rider account access" value={rider.account_status} onChange={(event) => onChange({ ...rider, account_status: event.target.value as Rider["account_status"] })} className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2"><option value="pending">Pending approval</option><option value="approved">Approved — can sign in</option><option value="suspended">Suspended</option></select></label></div>;
+}
+
+function ProductVariantEditor({ variants, onChange }: { variants: ProductVariant[]; onChange: (variants: ProductVariant[]) => void }) {
+  const updateVariant = (index: number, patch: Partial<ProductVariant>) => onChange(variants.map((variant, variantIndex) => variantIndex === index ? { ...variant, ...patch } : variant));
+  return (
+    <fieldset className="rounded-lg border border-green-100 p-3 sm:col-span-2">
+      <legend className="px-1 text-sm font-semibold text-green-900">Sizes or varieties</legend>
+      <p className="mb-2 text-xs text-gray-600">Optional. Add labels such as 500 g, Large, or Red with the price for that option. Custom options replace automatic size suggestions.</p>
+      <div className="space-y-2">
+        {variants.map((variant, index) => (
+          <div key={index} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] gap-2">
+            <input aria-label={`Option ${index + 1} name`} placeholder="Size or variety" value={variant.name} onChange={(event) => updateVariant(index, { name: event.target.value })} />
+            <input aria-label={`Option ${index + 1} price in naira`} type="number" min="0" step="0.01" placeholder="Price (₦)" value={variant.price} onChange={(event) => updateVariant(index, { price: Number(event.target.value) })} />
+            <button type="button" onClick={() => onChange(variants.filter((_, variantIndex) => variantIndex !== index))} aria-label={`Remove option ${index + 1}`} className="border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50">Remove</button>
+          </div>
+        ))}
+      </div>
+      <button type="button" disabled={variants.length >= 20} onClick={() => onChange([...variants, { name: "", price: 0 }])} className="mt-2 border border-green-200 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:opacity-50">Add size or variety</button>
+    </fieldset>
+  );
 }

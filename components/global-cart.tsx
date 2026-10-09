@@ -38,7 +38,7 @@ export default function GlobalCart() {
 
   return (
     <>
-      {pathname !== "/cooked-food" && (
+      {pathname !== "/cooked-food" && !pathname.startsWith("/admin") && !pathname.startsWith("/agent") && !pathname.startsWith("/rider") && (
         <Link
           href="/cooked-food#cart"
           className="fixed right-4 top-4 z-50 hidden rounded-full bg-white p-3 text-2xl shadow-md ring-1 ring-green-100 transition hover:bg-green-50 md:block"

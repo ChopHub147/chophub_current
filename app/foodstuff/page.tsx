@@ -2,20 +2,24 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getGrocerySizeOptions, type GrocerySizeOption } from "@/lib/grocery-size-options";
 
 type Product = {
   id: string;
   name: string;
   category: string;
+  subcategory: string;
   pack: string;
   price: number;
   description: string;
   icon: string;
   available: boolean;
+  variant_options: Array<{ name: string; price: number }>;
 };
 
 type CartItem = {
   id: string;
+  productId?: string;
   name: string;
   price: number;
   quantity: number;
@@ -23,7 +27,6 @@ type CartItem = {
 };
 
 const cartStorageKey = "chophub-cart";
-const categories = ["All", "Grains & Staples", "Flours & Baking", "Cooking Oils", "Canned & Packaged", "Seasonings", "Beverages", "Snacks", "Household"];
 
 type ProductSeed = readonly [string, string, string, string, number, string, string];
 
@@ -111,6 +114,22 @@ const products: Product[] = ([
   ["cashews", "Cashew nuts", "Snacks", "250 g", 3500, "Crunchy nuts with a naturally rich and buttery flavour.", "🥜"],
   ["coconut-chips", "Coconut chips", "Snacks", "100 g", 1200, "Crisp coconut slices for a naturally sweet snack.", "🥥"],
   ["granola", "Granola", "Snacks", "500 g", 3500, "Crunchy oat-based mix for breakfast, yoghurt, and snacking.", "🥣"],
+  ["baby-rice-cereal", "Baby rice cereal", "Baby Food", "300 g", 3500, "Packaged baby cereal; follow the age and preparation guidance on the label.", "🥣"],
+  ["baby-multigrain-cereal", "Baby multigrain cereal", "Baby Food", "300 g", 3800, "Packaged multigrain baby cereal; follow the age and preparation guidance on the label.", "🥣"],
+  ["baby-oat-cereal", "Baby oat cereal", "Baby Food", "300 g", 3200, "Packaged oat cereal for babies; follow the age and preparation guidance on the label.", "🥣"],
+  ["apple-banana-puree", "Apple and banana baby puree", "Baby Food", "90 g pouch", 1500, "Fruit puree pouch; check the product label for age guidance and ingredients.", "🍎"],
+  ["carrot-sweet-potato-puree", "Carrot and sweet potato baby puree", "Baby Food", "90 g pouch", 1500, "Vegetable puree pouch; check the product label for age guidance and ingredients.", "🥕"],
+  ["baby-fruit-puree-jar", "Mixed fruit baby puree", "Baby Food", "125 g jar", 1800, "Ready-to-serve fruit puree; check the product label for age guidance and ingredients.", "🍐"],
+  ["baby-puffs", "Baby snack puffs", "Baby Food", "50 g pack", 2200, "Packaged baby snack; follow the age and serving guidance on the label.", "🍼"],
+  ["teething-biscuits", "Teething biscuits", "Baby Food", "100 g pack", 2500, "Packaged teething biscuits; follow the age and serving guidance on the label.", "🍪"],
+  ["adult-dog-food", "Adult dog food", "Pet Food", "1 kg bag", 6500, "Packaged dog food; follow the feeding guide on the product label.", "🐕"],
+  ["puppy-food", "Puppy food", "Pet Food", "1 kg bag", 7000, "Packaged puppy food; follow the feeding guide on the product label.", "🐶"],
+  ["dry-cat-food", "Dry cat food", "Pet Food", "1 kg bag", 7500, "Packaged cat food; follow the feeding guide on the product label.", "🐈"],
+  ["wet-cat-food", "Wet cat food", "Pet Food", "85 g pouch", 1500, "Single-serve wet cat food pouch; check the product label for feeding guidance.", "🐈"],
+  ["wet-dog-food", "Wet dog food", "Pet Food", "400 g tin", 2500, "Packaged wet dog food; check the product label for feeding guidance.", "🐕"],
+  ["dog-treats", "Dog treats", "Pet Food", "100 g pack", 2500, "Packaged dog treats; follow the serving guidance on the product label.", "🦴"],
+  ["cat-treats", "Cat treats", "Pet Food", "60 g pack", 2000, "Packaged cat treats; follow the serving guidance on the product label.", "🐟"],
+  ["fish-food-flakes", "Fish food flakes", "Pet Food", "50 g pack", 1800, "Packaged ornamental fish food; follow the feeding instructions on the label.", "🐠"],
   ["dishwashing-liquid", "Dishwashing liquid", "Household", "500 ml", 1800, "Cuts through grease and keeps dishes clean and fresh.", "🧼"],
   ["liquid-laundry-detergent", "Liquid laundry detergent", "Household", "1 litre", 3500, "Laundry aid that softens clothes, reduces static, and adds a fresh scent.", "🧴"],
   ["bar-soap", "Bar soap", "Household", "1 bar", 700, "Multipurpose soap for household washing and cleaning.", "🧼"],
@@ -131,11 +150,82 @@ const products: Product[] = ([
   ["mosquito-coils", "Mosquito coils", "Household", "Pack", 1000, "Convenient household mosquito protection for outdoor and indoor use.", "🌀"],
   ["air-freshener", "Air freshener", "Household", "300 ml", 1800, "Helps keep rooms smelling fresh and pleasant.", "🌿"],
   ["laundry-pegs", "Laundry pegs", "Household", "Pack", 900, "Reusable pegs for hanging and drying clothes.", "📌"],
-] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, pack, price, description, icon, available: true }));
+] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, subcategory: "", pack, price, description, icon, available: true, variant_options: [] }));
+
+const groceryPhotos = {
+  garri: "https://homefoodly.com/cdn/shop/files/7259.jpg?v=1752598574",
+  yam: "https://www.surulerefoods.com/cdn/shop/files/Yam_Collection.jpg?v=1762123362&width=900",
+  rice: "https://images.unsplash.com/photo-1651793371427-ad065df0d208?auto=format&fit=crop&w=900&q=80",
+  beans: "https://images.unsplash.com/photo-1679146656308-ec92afe7b0c1?auto=format&fit=crop&w=900&q=80",
+  flour: "https://images.unsplash.com/photo-1714842981153-ffeaf74e7a1a?auto=format&fit=crop&w=900&q=80",
+  pasta: "https://images.unsplash.com/photo-1551892374-ecf8754cf8b0?auto=format&fit=crop&w=900&q=80",
+  oil: "https://images.unsplash.com/photo-1662058595162-10e024b1a907?auto=format&fit=crop&w=900&q=80",
+  canned: "https://images.unsplash.com/photo-1622985445103-fa1f01e80709?auto=format&fit=crop&w=900&q=80",
+  spices: "https://images.unsplash.com/photo-1672842056361-1838711c5aeb?auto=format&fit=crop&w=900&q=80",
+  drinks: "https://images.unsplash.com/photo-1585861299373-491140ca920e?auto=format&fit=crop&w=900&q=80",
+  snacks: "https://images.unsplash.com/photo-1755752917179-28746dd4dd74?auto=format&fit=crop&w=900&q=80",
+  cleaning: "https://images.unsplash.com/photo-1716625300720-b34970a2d890?auto=format&fit=crop&w=900&q=80",
+  tissue: "https://images.unsplash.com/photo-1599033232689-1b154cbfc2c5?auto=format&fit=crop&w=900&q=80",
+} as const;
+
+function photoForGrocery(product: Product) {
+  const name = `${product.id} ${product.name}`.toLowerCase();
+  if (/^(https?:\/\/|\/)/i.test(product.icon)) return product.icon;
+  if (/baby|pet|puppy|kitten|dog|cat|fish food/.test(name)) return null;
+  // Prefer the matching product photos already bundled with the site. The
+  // external category photos below remain a fallback for products without one.
+  if (/garri/.test(name)) return "/garri.jpeg";
+  if (/basmati/.test(name)) return "/basmati_rice.jpg";
+  if (/rice/.test(name)) return "/Long-grain_rice.webp";
+  if (/baked beans/.test(name)) return "/canned_beans.webp";
+  if (/honey beans/.test(name)) return "/honey-beans.webp";
+  if (/yam/.test(name)) return groceryPhotos.yam;
+  if (/wheat flour|plain flour|self-raising flour|corn flour/.test(name)) return "/wheat_flour.jpg";
+  if (/tomato paste|canned tomatoes/.test(name)) return "/canned_tomatoes.webp";
+  if (/coconut milk/.test(name)) return "/coconut_milk.jpg";
+  if (/evaporated milk/.test(name)) return "/evaporated_milk.jpg";
+  if (/mackerel/.test(name)) return "/mackerel_groceries.webp";
+  if (/tuna/.test(name)) return "/tuna.avif";
+  if (/ketchup/.test(name)) return "/ketchup.webp";
+  if (/mayonnaise/.test(name)) return "/mayonnaise.webp";
+  if (/sweet corn/.test(name)) return "/sweet_corn.jpg";
+  if (/milo/.test(name)) return "/milo-food.webp";
+  if (/bournvita/.test(name)) return "/bournvita.jpg";
+  if (/horlicks/.test(name)) return "/horlicks.png";
+  if (/coffee/.test(name)) return "/Coffee.jpg";
+  if (/popcorn/.test(name)) return "/popcorn.jpeg";
+  if (/plantain chips/.test(name)) return "/chips.webp";
+  if (/chin chin/.test(name)) return "/Chin-Chin.png";
+  if (/baked beans|canned|tomato paste|ketchup|mayonnaise|sardine|mackerel|tuna|evaporated milk|coconut milk/.test(name)) return groceryPhotos.canned;
+  if (/white beans|honey beans|legume|peanut|groundnut|cashew/.test(name)) return groceryPhotos.beans;
+  if (/rice|semolina|wheat meal|oats|grain/.test(name)) return groceryPhotos.rice;
+  if (/spaghetti|macaroni|pasta/.test(name)) return groceryPhotos.pasta;
+  if (/flour|custard|pancake|baking|cocoa|icing sugar|vanilla|yeast|cake mix/.test(name)) return groceryPhotos.flour;
+  if (/oil/.test(name)) return groceryPhotos.oil;
+  if (/seasoning|maggi|knorr|curry|thyme|bay leaf|pepper|paprika|ginger powder|garlic powder|salt/.test(name)) return groceryPhotos.spices;
+  if (/beverage|milo|bournvita|horlicks|tea|coffee|chocolate|juice|malt drink|soft drink|water/.test(name)) return groceryPhotos.drinks;
+  if (/snack|gala|chin chin|plantain chips|potato chips|biscuit|cracker|popcorn|granola|coconut chips/.test(name)) return groceryPhotos.snacks;
+  if (/tissue|paper towel/.test(name)) return groceryPhotos.tissue;
+  if (/household|clean|soap|detergent|bleach|disinfectant|sponge|scouring|foil|cling film|storage bag|garbage bag|mosquito coil|air freshener|laundry peg/.test(name)) return groceryPhotos.cleaning;
+  const category = product.category.toLowerCase();
+  if (category.includes("grain") || category.includes("staple")) return groceryPhotos.rice;
+  if (category.includes("flour") || category.includes("baking")) return groceryPhotos.flour;
+  if (category.includes("oil")) return groceryPhotos.oil;
+  if (category.includes("canned") || category.includes("packaged")) return groceryPhotos.canned;
+  if (category.includes("season")) return groceryPhotos.spices;
+  if (category.includes("beverage")) return groceryPhotos.drinks;
+  if (category.includes("snack")) return groceryPhotos.snacks;
+  if (category.includes("household")) return groceryPhotos.cleaning;
+  return null;
+}
 
 export default function FoodstuffPage() {
   const [catalogProducts, setCatalogProducts] = useState(products);
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
+  const categories = useMemo(() => ["All", ...Array.from(new Set(catalogProducts.map((product) => product.category.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [catalogProducts]);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("All");
+  const subcategories = useMemo(() => ["All", ...Array.from(new Set(catalogProducts.filter((product) => product.category === selectedCategory).map((product) => product.subcategory.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [catalogProducts, selectedCategory]);
   const [showCategories, setShowCategories] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [cartCount, setCartCount] = useState(0);
@@ -145,15 +235,16 @@ export default function FoodstuffPage() {
       const query = searchQuery.trim().toLowerCase();
       return catalogProducts.filter((product) => {
         const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
-        const matchesSearch = !query || `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(query);
-        return matchesCategory && matchesSearch;
+        const matchesSubcategory = selectedSubcategory === "All" || product.subcategory === selectedSubcategory;
+        const matchesSearch = !query || `${product.name} ${product.category} ${product.subcategory} ${product.description}`.toLowerCase().includes(query);
+        return matchesCategory && matchesSubcategory && matchesSearch;
       });
     },
-    [catalogProducts, searchQuery, selectedCategory]
+    [catalogProducts, searchQuery, selectedCategory, selectedSubcategory]
   );
 
   useEffect(() => {
-    fetch("/api/products?section=foodstuff")
+    fetch("/api/products?section=foodstuff", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load Groceries products");
         return response.json();
@@ -164,11 +255,13 @@ export default function FoodstuffPage() {
             id: String(product.id),
             name: String(product.name),
             category: String(product.category),
+            subcategory: String(product.subcategory || ""),
             pack: String(product.unit),
             price: Number(product.price),
             description: String(product.description),
             icon: String(product.image || "🛒"),
             available: product.stock_status !== "unavailable",
+            variant_options: Array.isArray(product.variant_options) ? product.variant_options as Product["variant_options"] : [],
           }));
           const mergedCatalog = new Map(products.map((product) => [product.id, product]));
           for (const databaseProduct of databaseCatalog) {
@@ -183,13 +276,16 @@ export default function FoodstuffPage() {
       .catch(() => undefined);
   }, []);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, selectedSize: GrocerySizeOption) => {
     const stored = window.localStorage.getItem(cartStorageKey);
     const cart: CartItem[] = stored ? JSON.parse(stored) : [];
-    const existing = cart.find((item) => item.id === product.id);
+    const sizeOptions = product.variant_options.length ? product.variant_options : getGrocerySizeOptions(product.name, product.pack, product.price).map((option) => ({ name: option.unit, price: option.price }));
+    const cartId = sizeOptions.length > 1 ? `${product.id}::option-${encodeURIComponent(selectedSize.unit)}` : product.id;
+    const itemName = `${product.name} (${selectedSize.unit})`;
+    const existing = cart.find((item) => item.id === cartId);
     const nextCart = existing
-      ? cart.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      : [...cart, { id: product.id, name: `${product.name} (${product.pack})`, price: product.price, quantity: 1, image: product.icon }];
+      ? cart.map((item) => item.id === cartId ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...cart, { id: cartId, productId: product.id, name: itemName, price: selectedSize.price, quantity: 1, image: photoForGrocery(product) || product.icon }];
     window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
     window.dispatchEvent(new Event("chophub-cart-updated"));
     setCartCount(nextCart.reduce((total, item) => total + item.quantity, 0));
@@ -219,34 +315,51 @@ export default function FoodstuffPage() {
         </form>
         <div className="mt-8">
           <button type="button" onClick={() => setShowCategories((open) => !open)} aria-expanded={showCategories} className="flex w-full items-center justify-between rounded-2xl border border-amber-100 bg-white px-4 py-3 text-left text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50">
-            <span>{selectedCategory === "All" ? "Browse grocery categories" : selectedCategory}</span>
+            <span>{selectedCategory === "All" ? "Browse grocery categories" : selectedSubcategory === "All" ? selectedCategory : `${selectedCategory} · ${selectedSubcategory}`}</span>
             <span aria-hidden="true">{showCategories ? "⌃" : "⌄"}</span>
           </button>
           {showCategories && <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-amber-100 bg-white p-3 shadow-sm sm:grid-cols-3 lg:grid-cols-5">
             {categories.map((category) => (
-              <button key={category} type="button" onClick={() => { setSelectedCategory(category); setShowCategories(false); }} className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${selectedCategory === category ? "bg-amber-600 text-white" : "text-amber-900 hover:bg-amber-50"}`}>
+              <button key={category} type="button" onClick={() => { setSelectedCategory(category); setSelectedSubcategory("All"); }} className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${selectedCategory === category ? "bg-amber-600 text-white" : "text-amber-900 hover:bg-amber-50"}`}>
                 {category}
               </button>
             ))}
+            {selectedCategory !== "All" && subcategories.length > 1 && <div className="col-span-full flex flex-wrap gap-2 border-t border-amber-100 pt-3">{subcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => { setSelectedSubcategory(subcategory); setShowCategories(false); }} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${selectedSubcategory === subcategory ? "border-amber-600 bg-amber-600 text-white" : "border-amber-200 text-amber-900 hover:bg-amber-50"}`}>{subcategory === "All" ? `All ${selectedCategory}` : subcategory}</button>)}</div>}
           </div>}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {filteredProducts.map((product) => (
-            <article key={product.id} className={`rounded-2xl border border-amber-100 bg-white p-4 shadow-sm ${product.available ? "" : "opacity-70"}`}>
-              <div className="flex h-24 items-center justify-center rounded-xl bg-amber-50 text-5xl">{product.icon}</div>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-700">{product.category}</p>
-              <h2 className="mt-1 font-bold text-amber-950">{product.name}</h2>
-              <p className="mt-1 text-xs text-gray-500">{product.pack}</p>
-              <p className="mt-2 text-sm text-gray-600">{product.description}</p>
-              {!product.available && <p className="mt-2 text-xs font-semibold text-red-600">Currently unavailable</p>}
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <span className="font-bold text-amber-800">₦{product.price.toLocaleString()}</span>
-                <button type="button" disabled={!product.available} onClick={() => addToCart(product)} className="rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500">
-                  {product.available ? (addedProductId === product.id ? "Added ✓" : "Add") : "Unavailable"}
-                </button>
-              </div>
-            </article>
-          ))}
+          {filteredProducts.map((product) => {
+            const sizeOptions = product.variant_options.length ? product.variant_options.map((option) => ({ unit: option.name, price: option.price })) : getGrocerySizeOptions(product.name, product.pack, product.price);
+            const selectedSize = sizeOptions.find((option) => option.unit === selectedSizes[product.id]) ?? sizeOptions.find((option) => option.unit === product.pack) ?? sizeOptions[0];
+            return (
+              <article key={product.id} className={`rounded-2xl border border-amber-100 bg-white p-4 shadow-sm ${product.available ? "" : "opacity-70"}`}>
+                <div className="flex h-36 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-5xl sm:h-40">
+                  {photoForGrocery(product)
+                    ? <img src={photoForGrocery(product)!} alt={`${product.name} grocery photo`} loading="lazy" className="h-full w-full object-cover" />
+                    : product.icon}
+                </div>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-700">{product.category}</p>
+                {product.subcategory && <p className="mt-0.5 text-xs font-medium text-amber-600">{product.subcategory}</p>}
+                <h2 className="mt-1 font-bold text-amber-950">{product.name}</h2>
+                {sizeOptions.length > 1 ? (
+                  <label className="mt-2 flex items-center justify-between gap-2 text-xs font-medium text-gray-600">
+                    <span>{product.variant_options.length ? "Option" : "Size"}</span>
+                    <select value={selectedSize.unit} onChange={(event) => setSelectedSizes((current) => ({ ...current, [product.id]: event.target.value }))} aria-label={`Choose size for ${product.name}`} className="rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-sm text-amber-950">
+                      {sizeOptions.map((option) => <option key={option.unit} value={option.unit}>{option.unit}</option>)}
+                    </select>
+                  </label>
+                ) : <p className="mt-1 text-xs text-gray-500">{product.pack}</p>}
+                <p className="mt-2 text-sm text-gray-600">{product.description}</p>
+                {!product.available && <p className="mt-2 text-xs font-semibold text-red-600">Currently unavailable</p>}
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <span className="font-bold text-amber-800">₦{selectedSize.price.toLocaleString()}</span>
+                  <button type="button" disabled={!product.available} onClick={() => addToCart(product, selectedSize)} className="rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500">
+                    {product.available ? (addedProductId === product.id ? "Added ✓" : "Add") : "Unavailable"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
         <div className="mt-10 text-center">
           <p className="text-sm text-gray-600">{cartCount > 0 ? `${cartCount} item${cartCount === 1 ? "" : "s"} added to your ChopHub cart.` : "Select products to add them to your ChopHub cart."}</p>

@@ -25,3 +25,55 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.admin-dashboard input:not([type="file"]),
+.admin-dashboard textarea,
+.admin-dashboard select {
+  border-color: #dce8df;
+  border-radius: 0.8rem;
+  background-color: #fff;
+  color: #17251d;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.admin-dashboard input:not([type="file"]),
+.admin-dashboard select {
+  min-height: 2.75rem;
+}
+
+.admin-dashboard textarea {
+  min-height: 5.5rem;
+}
+
+.admin-dashboard input:not([type="file"]):focus,
+.admin-dashboard textarea:focus,
+.admin-dashboard select:focus {
+  border-color: #34a36a;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgb(52 163 106 / 14%);
+}
+
+.admin-dashboard [class*="rounded-xl"][class*="border-green-100"][class*="p-4"] {
+  border-color: #e1ebe3;
+  border-radius: 1.15rem;
+  background-color: #fff;
+  box-shadow: 0 2px 10px rgb(25 55 35 / 4%);
+}
+
+.admin-dashboard button {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.admin-dashboard button:focus-visible {
+  outline: 3px solid rgb(52 163 106 / 35%);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-dashboard button,
+  .admin-dashboard input,
+  .admin-dashboard textarea,
+  .admin-dashboard select {
+    transition: none;
+  }
+}

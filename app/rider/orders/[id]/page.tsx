@@ -34,8 +34,8 @@ export default function RiderOrderPage() {
           throw new Error("Could not load order");
         }
 
-        const data = (await response.json()) as Order;
-        setOrder(data);
+        const data = (await response.json()) as { order?: Order; error?: string };
+        setOrder(data.order ?? null);
       } catch (error) {
         console.error(error);
         setError("Could not load this delivery.");

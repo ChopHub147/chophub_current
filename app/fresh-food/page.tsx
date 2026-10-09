@@ -7,18 +7,20 @@ type FreshProduct = {
   id: string;
   name: string;
   category: string;
+  subcategory?: string;
   unit: string;
   price: number;
   description: string;
   icon: string;
   stock: "In stock" | "Limited" | "Unavailable";
+  variant_options?: Array<{ name: string; price: number }>;
 };
 
-type CartItem = { id: string; name: string; price: number; quantity: number; image: string };
+type CartItem = { id: string; productId?: string; name: string; price: number; quantity: number; image: string };
 const cartStorageKey = "chophub-cart";
-const categories = ["All", "Fruits", "Roots & Tubers", "Leafy Greens", "Peppers", "Onions & Aromatics", "Tomatoes", "Salad Vegetables", "Fresh Vegetables", "Plantain & Cooking Banana", "Fresh Herbs", "Nigerian Local Greens", "Meat & Poultry", "Fish & Seafood", "Eggs & Dairy"];
 
-type ProductPhoto = { src: string; credit: string; fileUrl: string; license?: string; licenseUrl?: string };
+type ProductPhoto = { src: string; credit?: string; fileUrl?: string; license?: string; licenseUrl?: string };
+const localPhoto = (fileName: string): ProductPhoto => ({ src: `/${fileName}` });
 const commonsPhoto = (fileName: string, credit: string, license?: string, licenseUrl?: string): ProductPhoto => ({
   src: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=700`,
   credit,
@@ -28,82 +30,94 @@ const commonsPhoto = (fileName: string, credit: string, license?: string, licens
 });
 
 const productPhotos: Record<string, ProductPhoto> = {
-  banana: commonsPhoto("Banana Fruit.JPG", "ZooFari · Wikimedia Commons", "Public domain"),
-  plantain: commonsPhoto("Riped Plantain.jpg", "Bambi Cia · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  orange: commonsPhoto("Orange fruit (Citrus × sinensis).jpg", "Kuttykrishnan Photos · Wikimedia Commons", "CC0"),
+  banana: localPhoto("banana.jpg"),
+  plantain: localPhoto("ripe_plantain.jpeg"),
+  ripePlantain: localPhoto("ripe_plantain.jpeg"),
+  unripePlantain: localPhoto("unripe_plantain.webp"),
+  orange: localPhoto("oranges.jpg"),
   lemon: commonsPhoto("Whole-Lemon.jpg", "Evan-Amos · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
   lime: commonsPhoto("Lime - whole and halved.jpg", "Ivar Leidus · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   tangerine: commonsPhoto("TangerineFruit.jpg", "Brent Ramerth · Wikimedia Commons", "CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/"),
   grapefruit: commonsPhoto("Grapefruits - whole-halved-segments.jpg", "Ivar Leidus · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   assortedFruit: commonsPhoto("Assorted Fruits.jpg", "SIEBHONU · Wikimedia Commons · Nigeria", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   citrus: commonsPhoto("Citrus fruits.jpg", "Scott Bauer, USDA · Wikimedia Commons", "Public domain"),
-  papaya: commonsPhoto("Papaya fruit.JPG", "Miansari66 · Wikimedia Commons", "Public domain"),
-  mango: commonsPhoto("A finished mango fruit.jpg", "Yahuzaishat · Wikimedia Commons", "CC0"),
+  papaya: localPhoto("pawpaw.jpg"),
+  mango: localPhoto("mango.jpg"),
   pineapple: commonsPhoto("Pineapple.jpg", "Renee Comet / NCI · Wikimedia Commons", "Public domain"),
-  watermelon: commonsPhoto("Watermelon.jpg", "Scott Bauer, USDA · Wikimedia Commons", "Public domain"),
-  grapes: commonsPhoto("Green grapes in plastic punnets at the supermarket.jpg", "Ralf Roletschek · Wikimedia Commons", "GFDL 1.2", "https://www.gnu.org/licenses/old-licenses/fdl-1.2.html"),
-  avocado: commonsPhoto("Avocados Fruit.jpg", "SarKaLay · Wikimedia Commons", "CC0"),
+  watermelon: localPhoto("watermelon_.jpeg"),
+  grapes: localPhoto("Grapes-.jpg"),
+  avocado: localPhoto("avocado-.jpeg"),
   apple: commonsPhoto("Apples in the supermarket.JPG", "Ehedaya · Wikimedia Commons", "Public domain"),
   berries: commonsPhoto("Strawberries.jpg", "Scott Bauer, USDA · Wikimedia Commons", "Public domain"),
-  agbalumo: commonsPhoto("An Agbalumo fruit.jpg", "Justmee3001 · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  africanPear: commonsPhoto("An African pear (Dacryodes edulis).jpg", "Victorpeter001 · Wikimedia Commons", "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
-  guava: commonsPhoto("GUAVA FRUIT.jpg", "SarKaLay · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+  agbalumo: localPhoto("african_star_apple.jpg"),
+  africanPear: localPhoto("african_pear.jpeg"),
+  guava: localPhoto("guava-.jpg"),
   soursop: commonsPhoto("Soursop (muricata).png", "Gérard · Wikimedia Commons", "CC BY-SA 2.0", "https://creativecommons.org/licenses/by-sa/2.0/"),
-  coconut: commonsPhoto("Brown Coconut.jpg", "Rukkyah · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+  coconut: localPhoto("coconut.jpg"),
   icheku: commonsPhoto("Cheleku fruit.jpg", "Adimora Chidinma · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   tigernut: commonsPhoto("Dried tiger nut 1.jpg", "Achiri Bitamsimli · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   cashew: commonsPhoto("A ripe cashew fruit.jpg", "Dokev31 · Wikimedia Commons", "CC0"),
   breadfruit: commonsPhoto("Breadfruit.jpg", "Charles T. Scowen · Wikimedia Commons", "Public domain"),
   kiwi: commonsPhoto("Kiwi.jpg", "Renee Comet / NCI · Wikimedia Commons", "Public domain"),
   pomegranate: commonsPhoto("Fruit, pomegranate.jpg", "Renukarenu1861 · Wikimedia Commons", "CC0"),
-  tomatoes: commonsPhoto("Fresh tomatoes fruit.jpg", "Bamjos · Wikimedia Commons", "CC0"),
-  onions: commonsPhoto("Freshly Harvested Onions at Barkin Dogo Market, Kaduna North 01.jpg", "Samsule2 · Wikimedia Commons · Kaduna market", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  redOnion: commonsPhoto("Red Onion.jpg", "Maaimpex · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  ginger: commonsPhoto("Ginger Root.jpg", "Sanjay Acharya · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  garlic: commonsPhoto("Bunch of garlic cloves.jpg", "Tomas Castelazo · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  springOnion: commonsPhoto("Allium fistulosum 0zz.jpg", "David J. Stang · Wikimedia Commons", "CC BY-NC 3.0 / GFDL 1.2", "https://www.gnu.org/licenses/old-licenses/fdl-1.2.html"),
+  tomatoes: localPhoto("Tomatoes.jpg"),
+  cherryTomatoes: localPhoto("cherry_tomatoes.jpeg"),
+  onions: localPhoto("onion.jpg"),
+  redOnion: localPhoto("red_onions.jpg"),
+  whiteOnion: localPhoto("white-onion-.jpg"),
+  ginger: localPhoto("fresh_ginger.jpg"),
+  garlic: localPhoto("fresh_garlic.webp"),
+  springOnion: localPhoto("spring_onion.jpeg"),
   bellPepper: commonsPhoto("Yellow and green Bell peppers.JPG", "Daderot · Wikimedia Commons", "Public domain"),
   greenBellPepper: commonsPhoto("Green-Bell-Pepper.jpg", "Evan-Amos · Wikimedia Commons", "Public domain"),
   redBellPepper: commonsPhoto("RedBellPepper.jpg", "Renee Comet / NCI · Wikimedia Commons", "Public domain"),
   yellowBellPepper: commonsPhoto("A yellow bell pepper.jpg", "Billjones94 · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   hotPepper: commonsPhoto("Fresh Tomatoes and pepper.jpg", "Eunice Ameh · Wikimedia Commons", "CC0"),
+  scotchBonnet: localPhoto("Scotch_Bonnet.webp"),
+  chiliPepper: localPhoto("chilli_pepper.jpeg"),
+  tatashe: localPhoto("tatashe.jpg"),
   ugu: commonsPhoto("Ugu leaf at monday market 01.jpg", "Dorcas Atule · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   waterleaf: commonsPhoto("Talinum ..jpg", "PicsPro · Wikimedia Commons", "CC0"),
   bitterleaf: commonsPhoto("Bitter-leaf.jpg", "MaziIwu · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   ewedu: commonsPhoto("Jute leave plant A.K.A ewedu leaf.jpg", "Zmu'az4Z · Wikimedia Commons", "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
-  afang: commonsPhoto("Fresh Afang Leaves.jpg", "Paul The Writer · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
+  afang: localPhoto("afang.jpeg"),
   gardenEgg: commonsPhoto("Fresh African Garden Eggs.jpg", "Halima Waziri · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  okra: commonsPhoto("Freshly harvested okra.jpg", "Attahokah · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
-  cucumber: commonsPhoto("FRESH CUCUMBER.jpg", "Bambi Cia · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+  okra: localPhoto("okro_.JPG"),
+  cucumber: localPhoto("Cucumber-.jpg"),
   beetroot: commonsPhoto("Beet root vegetable.jpg", "Tshrinivasan · Wikimedia Commons", "CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/"),
   radish: commonsPhoto("Radish (7856464484).jpg", "Dinesh Valke · Wikimedia Commons", "CC BY-SA 2.0", "https://creativecommons.org/licenses/by-sa/2.0/"),
   turnip: commonsPhoto("TurnipsInBasket.jpg", "Cacophony · Wikimedia Commons", "CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/"),
   spinach: commonsPhoto("Fresh Spinach and Kale harvest at the farm.jpg", "Anitah Pezz · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
   lettuce: commonsPhoto("Romaine lettuce.jpg", "USDA · Wikimedia Commons", "Public domain"),
-  cabbage: commonsPhoto("White Cabbage.jpg", "SarKaLay · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+  cabbage: localPhoto("greencabbage.jpg"),
   redCabbage: commonsPhoto("Red Cabbage.jpg", "SeanTwice · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
   zucchini: commonsPhoto("Picture of zucchini.jpg", "Nubelbariloe · Wikimedia Commons", "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
-  beans: commonsPhoto("Green-beans.jpg", "USDA · Wikimedia Commons", "Public domain"),
+  beans: localPhoto("green_beans.webp"),
   peas: commonsPhoto("Green peas.jpg", "Dunemaire · Wikimedia Commons", "CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/"),
   broccoli: commonsPhoto("Broccoli vegetable.jpg", "Jon Sullivan · Wikimedia Commons", "Public domain"),
   cauliflower: commonsPhoto("Cauliflower broccoflower.jpg", "National Cancer Institute · Wikimedia Commons", "Public domain"),
   corn: commonsPhoto("Sweet corn.jpg", "Challiyil Eswaramangalath Vipin · Wikimedia Commons", "CC BY-SA 2.0", "https://creativecommons.org/licenses/by-sa/2.0/"),
   herbs: commonsPhoto("Fresh green basil leaves (54986224214).jpg", "Wikimedia Commons", "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+  scentLeaf: localPhoto("scentleaf.jpg"),
   parsley: commonsPhoto("Parsley leaves.jpg", "Jeffery Martin · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
   cilantro: commonsPhoto("Cilantro leaf.jpg", "ZooFari · Wikimedia Commons", "Public domain"),
   mint: commonsPhoto("Fresh Mint leaves.jpg", "Mangosapiens · Wikimedia Commons", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
-  chicken: commonsPhoto("Fresh chicken meat.jpg", "Wikimedia Commons", "CC BY-SA 2.0", "https://creativecommons.org/licenses/by-sa/2.0/"),
-  beef: commonsPhoto("Fresh cut beef prepared for cooking at home on a kitchen counter in a well-lit space.jpg", "Wikimedia Commons", "CC BY 2.0", "https://creativecommons.org/licenses/by/2.0/"),
-  mackerel: commonsPhoto("Atlantic mackerel fish.jpg", "Wikimedia Commons", "Public domain"),
-  catfish: commonsPhoto("Fresh small sized catfish.jpg", "Iwai-Dialax · Wikimedia Commons", "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+  chicken: localPhoto("chicken.jpg"),
+  beef: localPhoto("Beef_.webp"),
+  mackerel: localPhoto("mackerel.jpeg"),
+  catfish: localPhoto("catfish.jpg"),
   eggplantOkra: commonsPhoto("Eggplant, banana peppers and giant okra.jpg", "Joi Ito · Wikimedia Commons", "CC BY 2.0", "https://creativecommons.org/licenses/by/2.0/"),
-  carrot: commonsPhoto("Carrots.JPG", "Kander · Wikimedia Commons", "Public domain"),
-  sweetPotato: commonsPhoto("Sweet Potatos.jpg", "SarKaLay · Wikimedia Commons", "CC0", "https://creativecommons.org/publicdomain/zero/1.0/"),
-  eggs: commonsPhoto("Eggsineggcarton.jpg", "Doggo19292 · Wikimedia Commons", "Public domain"),
+  carrot: localPhoto("carrots-.jpeg"),
+  sweetPotato: localPhoto("sweet_potatoes.webp"),
+  eggs: localPhoto("chicken_eggs.jpg"),
+  oha: localPhoto("oha.JPG"),
 };
 
 function photoForProduct(product: FreshProduct): ProductPhoto {
-  const name = `${product.id} ${product.name} ${product.category}`.toLowerCase();
+  if (/^(https?:\/\/|\/)/i.test(product.icon)) return { src: product.icon, credit: "Product image", fileUrl: product.icon };
+  const name = `${product.id} ${product.name}`.toLowerCase();
+  if (/unripe plantain/.test(name)) return productPhotos.unripePlantain;
+  if (/ripe plantain/.test(name)) return productPhotos.ripePlantain;
   if (/plantain/.test(name)) return productPhotos.plantain;
   if (/cooking.?banana/.test(name)) return productPhotos.banana;
   if (/banana/.test(name)) return productPhotos.banana;
@@ -131,8 +145,10 @@ function photoForProduct(product: FreshProduct): ProductPhoto {
   if (/grapefruit/.test(name)) return productPhotos.grapefruit;
   if (/lemon/.test(name)) return productPhotos.lemon;
   if (/lime/.test(name)) return productPhotos.lime;
+  if (/cherry tomato/.test(name)) return productPhotos.cherryTomatoes;
   if (/tomato/.test(name)) return productPhotos.tomatoes;
   if (/spring onion|scallion|green onion/.test(name)) return productPhotos.springOnion;
+  if (/white onion/.test(name)) return productPhotos.whiteOnion;
   if (/red onion/.test(name)) return productPhotos.redOnion;
   if (/onion|shallot/.test(name)) return productPhotos.onions;
   if (/ginger/.test(name)) return productPhotos.ginger;
@@ -153,17 +169,22 @@ function photoForProduct(product: FreshProduct): ProductPhoto {
   if (/cabbage/.test(name)) return productPhotos.cabbage;
   if (/okra/.test(name)) return productPhotos.okra;
   if (/sweet potato/.test(name)) return productPhotos.sweetPotato;
+  if (/scotch bonnet|ata rodo/.test(name)) return productPhotos.scotchBonnet;
+  if (/chili|chilli/.test(name)) return productPhotos.chiliPepper;
+  if (/tatashe/.test(name)) return productPhotos.tatashe;
   if (/pepper|tatashe|rodo/.test(name)) {
-    if (/red bell|tatashe/.test(name)) return productPhotos.redBellPepper;
+    if (/red bell/.test(name)) return productPhotos.redBellPepper;
     if (/yellow bell/.test(name)) return productPhotos.yellowBellPepper;
     if (/green bell/.test(name)) return productPhotos.greenBellPepper;
-    return /bell|tatashe/.test(name) ? productPhotos.bellPepper : productPhotos.hotPepper;
+    return /bell/.test(name) ? productPhotos.bellPepper : productPhotos.hotPepper;
   }
   if (/waterleaf/.test(name)) return productPhotos.waterleaf;
   if (/bitter.?leaf/.test(name)) return productPhotos.bitterleaf;
+  if (/oha/.test(name)) return productPhotos.oha;
   if (/ugu|pumpkin leaf/.test(name)) return productPhotos.ugu;
   if (/ewedu/.test(name)) return productPhotos.ewedu;
   if (/afang/.test(name)) return productPhotos.afang;
+  if (/scent leaf/.test(name)) return productPhotos.scentLeaf;
   if (/parsley/.test(name)) return productPhotos.parsley;
   if (/coriander|cilantro/.test(name)) return productPhotos.cilantro;
   if (/mint/.test(name)) return productPhotos.mint;
@@ -176,7 +197,6 @@ function photoForProduct(product: FreshProduct): ProductPhoto {
   if (/cauliflower/.test(name)) return productPhotos.cauliflower;
   if (/corn/.test(name)) return productPhotos.corn;
   if (/leafy green|leaf/.test(name)) return productPhotos.ugu;
-  if (/^https?:\/\//i.test(product.icon)) return { src: product.icon, credit: "Product image", fileUrl: product.icon };
   const category = product.category.toLowerCase();
   if (category === "fruits") return productPhotos.assortedFruit;
   if (category === "roots & tubers") return productPhotos.carrot;
@@ -278,7 +298,11 @@ const products: FreshProduct[] = [
 
 export default function FreshFoodPage() {
   const [catalogProducts, setCatalogProducts] = useState(products);
+  const categories = useMemo(() => ["All", ...Array.from(new Set(catalogProducts.map((product) => product.category.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [catalogProducts]);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("All");
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const subcategories = useMemo(() => ["All", ...Array.from(new Set(catalogProducts.filter((product) => product.category === selectedCategory).map((product) => (product.subcategory || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [catalogProducts, selectedCategory]);
   const [showCategories, setShowCategories] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [cartCount, setCartCount] = useState(0);
@@ -286,14 +310,15 @@ export default function FreshFoodPage() {
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return catalogProducts.filter((product) => {
-      const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
-      const matchesSearch = !query || `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
+        const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
+        const matchesSubcategory = selectedSubcategory === "All" || product.subcategory === selectedSubcategory;
+        const matchesSearch = !query || `${product.name} ${product.category} ${product.subcategory || ""} ${product.description}`.toLowerCase().includes(query);
+        return matchesCategory && matchesSubcategory && matchesSearch;
     });
-  }, [catalogProducts, searchQuery, selectedCategory]);
+    }, [catalogProducts, searchQuery, selectedCategory, selectedSubcategory]);
 
   useEffect(() => {
-    fetch("/api/products?section=fresh-food")
+    fetch("/api/products?section=fresh-food", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load Fresh Food products");
         return response.json();
@@ -304,24 +329,29 @@ export default function FreshFoodPage() {
             id: String(product.id),
             name: String(product.name),
             category: String(product.category),
+            subcategory: String(product.subcategory || ""),
             unit: String(product.unit),
             price: Number(product.price),
             description: String(product.description),
             icon: String(product.image || "🥬"),
             stock: product.stock_status === "limited" ? "Limited" : product.stock_status === "unavailable" ? "Unavailable" : "In stock",
+            variant_options: Array.isArray(product.variant_options) ? product.variant_options as FreshProduct["variant_options"] : [],
           })));
         }
       })
       .catch(() => undefined);
   }, []);
 
-  const addToCart = (product: FreshProduct) => {
+  const addToCart = (product: FreshProduct, selectedOption?: { name: string; price: number }) => {
     const stored = window.localStorage.getItem(cartStorageKey);
     const cart: CartItem[] = stored ? JSON.parse(stored) : [];
-    const existing = cart.find((item) => item.id === product.id);
+    const variants = product.variant_options || [];
+    const cartId = selectedOption && variants.length > 1 ? `${product.id}::option-${encodeURIComponent(selectedOption.name)}` : product.id;
+    const itemName = `${product.name} (${selectedOption?.name || product.unit})`;
+    const existing = cart.find((item) => item.id === cartId);
     const nextCart = existing
-      ? cart.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-      : [...cart, { id: product.id, name: `${product.name} (${product.unit})`, price: product.price, quantity: 1, image: photoForProduct(product).src }];
+      ? cart.map((item) => item.id === cartId ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...cart, { id: cartId, productId: product.id, name: itemName, price: selectedOption?.price ?? product.price, quantity: 1, image: photoForProduct(product).src }];
     window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
     window.dispatchEvent(new Event("chophub-cart-updated"));
     setCartCount(nextCart.reduce((total, item) => total + item.quantity, 0));
@@ -351,15 +381,16 @@ export default function FreshFoodPage() {
         </form>
         <div className="mt-8">
           <button type="button" onClick={() => setShowCategories((open) => !open)} aria-expanded={showCategories} className="flex w-full items-center justify-between rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-left text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-50">
-            <span>{selectedCategory === "All" ? "Browse fresh food categories" : selectedCategory}</span>
+            <span>{selectedCategory === "All" ? "Browse fresh food categories" : selectedSubcategory === "All" ? selectedCategory : `${selectedCategory} · ${selectedSubcategory}`}</span>
             <span aria-hidden="true">{showCategories ? "⌃" : "⌄"}</span>
           </button>
           {showCategories && <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm sm:grid-cols-3 lg:grid-cols-5">
             {categories.map((category) => (
-              <button key={category} type="button" onClick={() => { setSelectedCategory(category); setShowCategories(false); }} className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${selectedCategory === category ? "bg-emerald-600 text-white" : "text-emerald-900 hover:bg-emerald-50"}`}>
+              <button key={category} type="button" onClick={() => { setSelectedCategory(category); setSelectedSubcategory("All"); }} className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${selectedCategory === category ? "bg-emerald-600 text-white" : "text-emerald-900 hover:bg-emerald-50"}`}>
                 {category}
               </button>
             ))}
+            {selectedCategory !== "All" && subcategories.length > 1 && <div className="col-span-full flex flex-wrap gap-2 border-t border-emerald-100 pt-3">{subcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => { setSelectedSubcategory(subcategory); setShowCategories(false); }} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${selectedSubcategory === subcategory ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 text-emerald-900 hover:bg-emerald-50"}`}>{subcategory === "All" ? `All ${selectedCategory}` : subcategory}</button>)}</div>}
           </div>}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
@@ -376,21 +407,26 @@ export default function FreshFoodPage() {
                   onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
                 />
               </div>
-              <div className="mt-1 flex min-h-4 items-center gap-1 text-[9px] text-gray-400">
+              {productPhoto.credit && productPhoto.fileUrl && <div className="mt-1 flex min-h-4 items-center gap-1 text-[9px] text-gray-400">
                 <a href={productPhoto.fileUrl} target="_blank" rel="noreferrer" className="truncate hover:text-gray-600 hover:underline">
                   Photo: {productPhoto.credit}
                 </a>
                 {productPhoto.license && productPhoto.licenseUrl && <a href={productPhoto.licenseUrl} target="_blank" rel="noreferrer" className="shrink-0 hover:text-gray-600 hover:underline">{productPhoto.license}</a>}
                 {productPhoto.license && !productPhoto.licenseUrl && <span className="shrink-0">{productPhoto.license}</span>}
-              </div>
+              </div>}
               <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">{product.category}</p>
+              {product.subcategory && <p className="mt-0.5 text-xs font-medium text-emerald-600">{product.subcategory}</p>}
               <h2 className="mt-1 font-bold text-emerald-950">{product.name}</h2>
+              {product.variant_options?.length ? <label className="mt-2 block text-xs font-medium text-gray-600">Size or variety<select value={selectedVariants[product.id] ?? product.variant_options[0].name} onChange={(event) => setSelectedVariants((current) => ({ ...current, [product.id]: event.target.value }))} aria-label={`Choose size or variety for ${product.name}`} className="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-sm text-emerald-950">{product.variant_options.map((option) => <option key={option.name} value={option.name}>{option.name}</option>)}</select></label> : null}
               <p className="mt-1 text-xs text-gray-500">Price per {product.unit}</p>
               <p className="mt-2 text-xs text-gray-600">{product.description}</p>
               <p className={`mt-2 text-xs font-semibold ${product.stock === "In stock" ? "text-emerald-600" : product.stock === "Limited" ? "text-amber-600" : "text-red-600"}`}>{product.stock}</p>
               <div className="mt-4 flex items-center justify-between gap-2">
-                <span className="font-bold text-emerald-800">₦{product.price.toLocaleString()}</span>
-                <button type="button" disabled={product.stock === "Unavailable"} onClick={() => addToCart(product)} className="rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500">
+                <span className="font-bold text-emerald-800">₦{(product.variant_options?.find((option) => option.name === selectedVariants[product.id]) || product.variant_options?.[0])?.price.toLocaleString() || product.price.toLocaleString()}</span>
+                <button type="button" disabled={product.stock === "Unavailable"} onClick={() => {
+                  const selectedOption = product.variant_options?.find((option) => option.name === selectedVariants[product.id]) || product.variant_options?.[0];
+                  addToCart(product, selectedOption);
+                }} className="rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500">
                   {product.stock === "Unavailable" ? "Unavailable" : addedProductId === product.id ? "Added ✓" : "Add"}
                 </button>
               </div>

@@ -38,7 +38,7 @@ export default function CustomerMobileNav() {
     };
   }, []);
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/rider")) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/agent") || pathname.startsWith("/rider")) {
   return null;
 }
 
