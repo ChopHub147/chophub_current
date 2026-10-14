@@ -72,7 +72,59 @@ type Product = {
   variant_options: ProductVariant[];
 };
 
-type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null> };
+type VendorOnboarding = {
+  ownerName: string;
+  email: string;
+  whatsapp: string;
+  yearsInBusiness: string;
+  area: string;
+  landmark: string;
+  businessTypes: string[];
+  primaryContact: string;
+  backupContact: string;
+  preferredContact: string[];
+  description: string;
+  supplyItems: Array<{ name: string; unit: string; price: string; notes: string }>;
+  schedule: Record<string, { opening: string; closing: string; available: boolean }>;
+  fulfilmentTime: string;
+  largeOrderNotice: string;
+  minimumOrder: string;
+  urgentOrders: string;
+  orderConfirmation: string[];
+  restrictions: string;
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
+  paymentContact: string;
+  documents: Record<string, boolean>;
+  noDocuments: boolean;
+  declarationName: string;
+  declarationDate: string;
+  verificationStatus: "pending" | "verified" | "rejected";
+  dateReceived: string;
+  approvedBy: string;
+  assignedCategory: string;
+  approvalDate: string;
+  internalNotes: string;
+};
+
+const onboardingDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const onboardingDocumentNames = ["Government-issued ID", "CAC / business registration", "Food / health permit", "Proof of business address", "Other supporting document"];
+
+function createEmptyVendorOnboarding(): VendorOnboarding {
+  return {
+    ownerName: "", email: "", whatsapp: "", yearsInBusiness: "", area: "", landmark: "",
+    businessTypes: [], primaryContact: "", backupContact: "", preferredContact: [], description: "",
+    supplyItems: [],
+    schedule: Object.fromEntries(onboardingDays.map((day) => [day, { opening: "", closing: "", available: false }])),
+    fulfilmentTime: "", largeOrderNotice: "", minimumOrder: "", urgentOrders: "", orderConfirmation: [], restrictions: "",
+    accountName: "", bankName: "", accountNumber: "", paymentContact: "",
+    documents: {}, noDocuments: false, declarationName: "", declarationDate: "", verificationStatus: "pending",
+    dateReceived: "", approvedBy: "", assignedCategory: "", approvalDate: "", internalNotes: "",
+  };
+}
+
+type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; onboardingData?: VendorOnboarding };
 type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; account_status: "pending" | "approved" | "suspended"; last_location_at?: string | null };
 
 export default function AdminDashboard({
@@ -120,7 +172,7 @@ export default function AdminDashboard({
   const [vendorError, setVendorError] = useState("");
   const [vendorSavedMessage, setVendorSavedMessage] = useState("");
   const [savingVendorId, setSavingVendorId] = useState<number | "new" | null>(null);
-  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [], mealPrices: {} });
+  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, onboardingData: createEmptyVendorOnboarding() });
   const [riders, setRiders] = useState<Rider[]>([]);
   const [riderError, setRiderError] = useState("");
   const [savingRiderId, setSavingRiderId] = useState<number | "new" | null>(null);
@@ -208,7 +260,7 @@ export default function AdminDashboard({
         return response.json() as Promise<Vendor[]>;
       })
       .then(setVendors)
-      .catch(() => setVendorError("Vendors could not be loaded. Run the catalog SQL in Supabase first."));
+      .catch(() => setVendorError("Vendors could not be loaded. Check Supabase setup and apply supabase/vendor-onboarding.sql."));
   }, []);
 
   /* =========================
@@ -568,14 +620,14 @@ export default function AdminDashboard({
       const response = await fetch("/api/admin/vendors", { method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vendor) });
       const result = await response.json().catch(() => ({})) as Vendor & { error?: string };
       if (!response.ok) {
-        setVendorError(result.error || "Vendor details could not be saved. Check that the vendor database tables are installed.");
+        setVendorError(result.error || "Vendor details could not be saved. Check that the vendor tables and onboarding migration are installed in Supabase.");
       } else {
         const saved = result as Vendor;
         if (isNew) {
           setVendors((current) => [...current, saved]);
-          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: true, productIds: [], mealIds: [], mealPrices: {} });
+          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, onboardingData: createEmptyVendorOnboarding() });
         } else {
-          setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds } : item));
+          setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds, onboardingData: saved.onboardingData || item.onboardingData } : item));
         }
         setVendorSavedMessage(`${saved.name || vendor.name} saved with ${saved.productIds?.length ?? vendor.productIds.length} grocery/fresh food items and ${saved.mealIds?.length ?? vendor.mealIds.length} cooked meals assigned.`);
       }
@@ -1527,17 +1579,29 @@ const saveOrderOperation = async (
 
           {activeSection === "vendors" && (
             <div className="pt-5">
-              <h2 className="text-xl font-bold text-green-900">Vendor Directory</h2>
-              <p className="mt-1 text-sm text-gray-600">Add vendor contact information and select every Cooked Food, Grocery, and Fresh Food item that the vendor supplies.</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-green-900">Vendor Onboarding &amp; Directory</h2>
+                  <p className="mt-1 max-w-3xl text-sm text-gray-600">Capture the vendor&apos;s business, contacts, operating hours, supply list, payment details, and verification status using the ChopHub onboarding form.</p>
+                </div>
+                <a href="/api/admin/vendor-onboarding-form" className="inline-flex w-fit items-center gap-2 rounded-full border border-green-200 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">↓ Download paper form</a>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[
+                  [String(vendors.filter((vendor) => (vendor.onboardingData?.verificationStatus ?? "pending") === "pending").length), "Pending review", "border-amber-200 bg-amber-50 text-amber-900"],
+                  [String(vendors.filter((vendor) => vendor.onboardingData?.verificationStatus === "verified").length), "Verified vendors", "border-green-200 bg-green-50 text-green-900"],
+                  [String(vendors.filter((vendor) => vendor.onboardingData?.verificationStatus === "rejected").length), "Needs follow-up", "border-rose-200 bg-rose-50 text-rose-900"],
+                ].map(([value, label, tone]) => <div key={label} className={`rounded-xl border p-3 ${tone}`}><p className="text-2xl font-bold">{value}</p><p className="text-xs font-medium">{label}</p></div>)}
+              </div>
               {vendorError && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{vendorError}</p>}
               {vendorSavedMessage && <p role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{vendorSavedMessage}</p>}
               <div className="mt-4 rounded-xl border border-green-100 bg-green-50/50 p-4">
-                <h3 className="font-semibold text-green-900">Add vendor</h3>
+                <h3 className="font-semibold text-green-900">Start a vendor application</h3>
                 <VendorFields vendor={newVendor} products={products} meals={meals} onChange={setNewVendor} />
-                <button type="button" onClick={() => saveVendor(newVendor)} disabled={savingVendorId === "new"} className="mt-3 rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === "new" ? "Adding..." : "Add vendor"}</button>
+                <button type="button" onClick={() => saveVendor(newVendor)} disabled={savingVendorId === "new"} className="mt-3 rounded-full bg-green-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === "new" ? "Saving application..." : "Save vendor application"}</button>
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {vendors.map((vendor) => <div key={vendor.id} className="rounded-xl border border-green-100 p-4"><VendorFields vendor={vendor} products={products} meals={meals} onChange={(next) => setVendors((current) => current.map((item) => item.id === vendor.id ? { ...next, id: vendor.id } : item))} /><button type="button" onClick={() => saveVendor(vendor)} disabled={savingVendorId === vendor.id} className="mt-3 rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === vendor.id ? "Saving..." : "Save vendor"}</button></div>)}
+                {vendors.map((vendor) => <div key={vendor.id} className="rounded-xl border border-green-100 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Vendor #{vendor.id}</p><p className="font-semibold text-green-900">{vendor.name || "New vendor"}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${(vendor.onboardingData?.verificationStatus ?? "pending") === "verified" ? "bg-green-100 text-green-800" : vendor.onboardingData?.verificationStatus === "rejected" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>{vendor.onboardingData?.verificationStatus ?? "pending"}</span></div><VendorFields vendor={vendor} products={products} meals={meals} onChange={(next) => setVendors((current) => current.map((item) => item.id === vendor.id ? { ...next, id: vendor.id } : item))} /><button type="button" onClick={() => saveVendor(vendor)} disabled={savingVendorId === vendor.id} className="mt-3 rounded-full bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === vendor.id ? "Saving..." : "Save vendor record"}</button></div>)}
               </div>
             </div>
           )}
@@ -1783,6 +1847,7 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
       <input type="number" step="any" min="-90" max="90" placeholder="Pickup latitude" value={vendor.latitude ?? ""} onChange={(event) => onChange({ ...vendor, latitude: event.target.value === "" ? null : Number(event.target.value) })} className="rounded-lg border border-green-200 px-3 py-2" />
       <input type="number" step="any" min="-180" max="180" placeholder="Pickup longitude" value={vendor.longitude ?? ""} onChange={(event) => onChange({ ...vendor, longitude: event.target.value === "" ? null : Number(event.target.value) })} className="rounded-lg border border-green-200 px-3 py-2" />
       <textarea placeholder="Internal notes" value={vendor.notes} onChange={(event) => onChange({ ...vendor, notes: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2 text-sm sm:col-span-2" />
+      <VendorOnboardingEditor value={vendor.onboardingData ?? createEmptyVendorOnboarding()} onChange={(onboardingData) => onChange({ ...vendor, onboardingData })} />
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
         <legend className="px-1 text-sm font-semibold text-green-900">Cooked Food this vendor offers ({vendor.mealIds.length} selected)</legend>
         <div className="max-h-40 space-y-1 overflow-y-auto">
@@ -1815,6 +1880,61 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
         </div>
       </fieldset>
       <label className="flex items-center gap-2 text-sm font-semibold text-green-900 sm:col-span-2"><input type="checkbox" checked={vendor.active} onChange={(event) => onChange({ ...vendor, active: event.target.checked })} /> Available for assignments</label>
+    </div>
+  );
+}
+
+function VendorOnboardingEditor({ value, onChange }: { value: VendorOnboarding; onChange: (value: VendorOnboarding) => void }) {
+  const update = <K extends keyof VendorOnboarding>(key: K, next: VendorOnboarding[K]) => onChange({ ...value, [key]: next });
+  const toggleValue = (list: string[], item: string) => list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item];
+  const inputClass = "mt-1 w-full rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-gray-900";
+  const labelClass = "text-xs font-semibold text-gray-600";
+
+  return (
+    <div className="sm:col-span-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div><h3 className="text-sm font-bold text-green-900">Onboarding application</h3><p className="text-xs text-gray-500">Complete the sections from the paper form. Application details are saved with this vendor.</p></div>
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">3-page checklist</span>
+      </div>
+      <div className="space-y-2">
+        <details open className="rounded-xl border border-green-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-green-900">Page 1 · Business &amp; contact information</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className={labelClass}>Owner / contact person<input className={inputClass} value={value.ownerName} onChange={(event) => update("ownerName", event.target.value)} /></label>
+            <label className={labelClass}>Email address<input type="email" className={inputClass} value={value.email} onChange={(event) => update("email", event.target.value)} /></label>
+            <label className={labelClass}>WhatsApp number<input className={inputClass} value={value.whatsapp} onChange={(event) => update("whatsapp", event.target.value)} /></label>
+            <label className={labelClass}>Years in business<input className={inputClass} value={value.yearsInBusiness} onChange={(event) => update("yearsInBusiness", event.target.value)} /></label>
+            <label className={labelClass}>Area / neighbourhood<input className={inputClass} value={value.area} onChange={(event) => update("area", event.target.value)} /></label>
+            <label className={labelClass}>Nearest landmark<input className={inputClass} value={value.landmark} onChange={(event) => update("landmark", event.target.value)} /></label>
+            <fieldset className="rounded-lg border border-green-100 p-3 sm:col-span-2"><legend className="px-1 text-xs font-semibold text-gray-600">Type of business</legend><div className="grid gap-2 sm:grid-cols-2">{["Restaurant / Food Seller", "Meat / Poultry / Fish", "Grocery / Supermarket", "Bakery / Confectionery", "Fresh Food / Produce", "Other"].map((type) => <label key={type} className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={value.businessTypes.includes(type)} onChange={() => update("businessTypes", toggleValue(value.businessTypes, type))} />{type}</label>)}</div></fieldset>
+            <label className={labelClass}>Primary contact name &amp; phone<input className={inputClass} value={value.primaryContact} onChange={(event) => update("primaryContact", event.target.value)} /></label>
+            <label className={labelClass}>Backup contact name &amp; phone<input className={inputClass} value={value.backupContact} onChange={(event) => update("backupContact", event.target.value)} /></label>
+            <fieldset className="rounded-lg border border-green-100 p-3 sm:col-span-2"><legend className="px-1 text-xs font-semibold text-gray-600">Preferred contact method</legend><div className="flex flex-wrap gap-4">{["Phone Call", "WhatsApp", "SMS", "Other"].map((method) => <label key={method} className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={value.preferredContact.includes(method)} onChange={() => update("preferredContact", toggleValue(value.preferredContact, method))} />{method}</label>)}</div></fieldset>
+            <label className={labelClass + " sm:col-span-2"}>Business description<textarea className={inputClass} rows={3} value={value.description} onChange={(event) => update("description", event.target.value)} placeholder="What would the business like to supply through ChopHub?" /></label>
+          </div>
+        </details>
+
+        <details className="rounded-xl border border-green-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-green-900">Page 2 · Products &amp; operation</summary>
+          <div className="mt-3 space-y-3">
+            <fieldset className="rounded-lg border border-green-100 p-3"><legend className="px-1 text-xs font-semibold text-gray-600">Products / items to supply</legend><p className="mb-2 text-xs text-gray-500">Record the vendor&apos;s quoted unit and typical price; assign live ChopHub catalog items below.</p><div className="space-y-2">{value.supplyItems.map((item, index) => <div key={index} className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.8fr_1.2fr_auto]"><input aria-label={`Supply item ${index + 1}`} placeholder="Product / item" value={item.name} onChange={(event) => update("supplyItems", value.supplyItems.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} className="rounded-lg border border-green-200 px-3 py-2 text-sm" /><input aria-label={`Unit or size for item ${index + 1}`} placeholder="Unit / size" value={item.unit} onChange={(event) => update("supplyItems", value.supplyItems.map((row, rowIndex) => rowIndex === index ? { ...row, unit: event.target.value } : row))} className="rounded-lg border border-green-200 px-3 py-2 text-sm" /><input aria-label={`Typical price for item ${index + 1}`} type="number" min="0" placeholder="Price ₦" value={item.price} onChange={(event) => update("supplyItems", value.supplyItems.map((row, rowIndex) => rowIndex === index ? { ...row, price: event.target.value } : row))} className="rounded-lg border border-green-200 px-3 py-2 text-sm" /><input aria-label={`Notes for item ${index + 1}`} placeholder="Notes" value={item.notes} onChange={(event) => update("supplyItems", value.supplyItems.map((row, rowIndex) => rowIndex === index ? { ...row, notes: event.target.value } : row))} className="rounded-lg border border-green-200 px-3 py-2 text-sm" /><button type="button" onClick={() => update("supplyItems", value.supplyItems.filter((_, rowIndex) => rowIndex !== index))} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Remove</button></div>)}</div><button type="button" onClick={() => update("supplyItems", [...value.supplyItems, { name: "", unit: "", price: "", notes: "" }])} className="mt-2 rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-800 hover:bg-green-50">+ Add supply item</button></fieldset>
+            <fieldset className="rounded-lg border border-green-100 p-3"><legend className="px-1 text-xs font-semibold text-gray-600">Operating schedule</legend><div className="space-y-2">{onboardingDays.map((day) => { const hours = value.schedule[day] ?? { opening: "", closing: "", available: false }; return <div key={day} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2"><span className="text-sm font-medium text-gray-700">{day}</span><input aria-label={`${day} opening time`} type="time" value={hours.opening} onChange={(event) => update("schedule", { ...value.schedule, [day]: { ...hours, opening: event.target.value } })} className="min-w-0 rounded-lg border border-green-200 px-2 py-2 text-xs" /><input aria-label={`${day} closing time`} type="time" value={hours.closing} onChange={(event) => update("schedule", { ...value.schedule, [day]: { ...hours, closing: event.target.value } })} className="min-w-0 rounded-lg border border-green-200 px-2 py-2 text-xs" /><label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" checked={hours.available} onChange={(event) => update("schedule", { ...value.schedule, [day]: { ...hours, available: event.target.checked } })} />For ChopHub</label></div>; })}</div></fieldset>
+            <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Typical preparation / fulfilment time<input className={inputClass} value={value.fulfilmentTime} onChange={(event) => update("fulfilmentTime", event.target.value)} placeholder="e.g. 30–45 minutes" /></label><label className={labelClass}>Notice required for large orders<input className={inputClass} value={value.largeOrderNotice} onChange={(event) => update("largeOrderNotice", event.target.value)} /></label><label className={labelClass}>Minimum order (if applicable)<input className={inputClass} value={value.minimumOrder} onChange={(event) => update("minimumOrder", event.target.value)} /></label><label className={labelClass}>Can handle urgent orders?<select className={inputClass} value={value.urgentOrders} onChange={(event) => update("urgentOrders", event.target.value)}><option value="">Select...</option><option>Yes</option><option>No</option><option>Sometimes</option></select></label></div>
+            <fieldset className="rounded-lg border border-green-100 p-3"><legend className="px-1 text-xs font-semibold text-gray-600">How should ChopHub confirm orders?</legend><div className="flex flex-wrap gap-4">{["Phone Call", "WhatsApp", "SMS"].map((method) => <label key={method} className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={value.orderConfirmation.includes(method)} onChange={() => update("orderConfirmation", toggleValue(value.orderConfirmation, method))} />{method}</label>)}</div></fieldset>
+            <label className={labelClass}>Special notes / restrictions<textarea className={inputClass} rows={2} value={value.restrictions} onChange={(event) => update("restrictions", event.target.value)} placeholder="Blackout periods, minimum quantities, substitutions..." /></label>
+          </div>
+        </details>
+
+        <details className="rounded-xl border border-green-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-green-900">Page 3 · Payment, documents &amp; approval</summary>
+          <div className="mt-3 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Account name<input className={inputClass} value={value.accountName} onChange={(event) => update("accountName", event.target.value)} /></label><label className={labelClass}>Bank name<input className={inputClass} value={value.bankName} onChange={(event) => update("bankName", event.target.value)} /></label><label className={labelClass}>Account number<input inputMode="numeric" className={inputClass} value={value.accountNumber} onChange={(event) => update("accountNumber", event.target.value)} /></label><label className={labelClass}>Payment contact (if different)<input className={inputClass} value={value.paymentContact} onChange={(event) => update("paymentContact", event.target.value)} /></label></div>
+            <fieldset className="rounded-lg border border-green-100 p-3"><legend className="px-1 text-xs font-semibold text-gray-600">Document checklist · mark items received</legend><div className="grid gap-2 sm:grid-cols-2">{onboardingDocumentNames.map((document) => <label key={document} className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={value.documents[document] ?? false} onChange={(event) => update("documents", { ...value.documents, [document]: event.target.checked })} />{document}</label>)}<label className="flex items-center gap-2 text-sm font-medium text-amber-900 sm:col-span-2"><input type="checkbox" checked={value.noDocuments} onChange={(event) => update("noDocuments", event.target.checked)} />No document currently available</label></div><p className="mt-2 text-xs text-gray-500">This is a receipt checklist only. Store sensitive identity and bank documents securely outside this form.</p></fieldset>
+            <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Vendor / owner declaration name<input className={inputClass} value={value.declarationName} onChange={(event) => update("declarationName", event.target.value)} /></label><label className={labelClass}>Declaration date<input type="date" className={inputClass} value={value.declarationDate} onChange={(event) => update("declarationDate", event.target.value)} /></label></div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3"><h4 className="text-xs font-bold uppercase tracking-wide text-emerald-900">ChopHub office use</h4><div className="mt-2 grid gap-3 sm:grid-cols-2"><label className={labelClass}>Verification status<select className={inputClass} value={value.verificationStatus} onChange={(event) => update("verificationStatus", event.target.value as VendorOnboarding["verificationStatus"])}><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected / follow-up needed</option></select></label><label className={labelClass}>Date received<input type="date" className={inputClass} value={value.dateReceived} onChange={(event) => update("dateReceived", event.target.value)} /></label><label className={labelClass}>Approved by<input className={inputClass} value={value.approvedBy} onChange={(event) => update("approvedBy", event.target.value)} /></label><label className={labelClass}>Assigned category<input className={inputClass} value={value.assignedCategory} onChange={(event) => update("assignedCategory", event.target.value)} placeholder="e.g. Restaurant / Fresh produce" /></label><label className={labelClass}>Approval date<input type="date" className={inputClass} value={value.approvalDate} onChange={(event) => update("approvalDate", event.target.value)} /></label><label className={labelClass + " sm:col-span-2"}>Internal notes<textarea className={inputClass} rows={2} value={value.internalNotes} onChange={(event) => update("internalNotes", event.target.value)} placeholder="Staff-only review notes" /></label></div></div>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

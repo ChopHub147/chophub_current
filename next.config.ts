@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    "/api/admin/vendor-onboarding-form": ["./ChopHub_Vendor_Onboarding_Form.pdf"],
+  },
 };
 
 export default nextConfig;
