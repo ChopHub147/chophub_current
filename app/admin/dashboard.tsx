@@ -124,6 +124,23 @@ function createEmptyVendorOnboarding(): VendorOnboarding {
   };
 }
 
+function normalizeVendorOnboarding(value: unknown): VendorOnboarding {
+  const defaults = createEmptyVendorOnboarding();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return defaults;
+  const saved = value as Partial<VendorOnboarding>;
+  return {
+    ...defaults,
+    ...saved,
+    businessTypes: Array.isArray(saved.businessTypes) ? saved.businessTypes.filter((item): item is string => typeof item === "string") : [],
+    preferredContact: Array.isArray(saved.preferredContact) ? saved.preferredContact.filter((item): item is string => typeof item === "string") : [],
+    orderConfirmation: Array.isArray(saved.orderConfirmation) ? saved.orderConfirmation.filter((item): item is string => typeof item === "string") : [],
+    supplyItems: Array.isArray(saved.supplyItems) ? saved.supplyItems.filter((item): item is NonNullable<typeof item> => Boolean(item && typeof item === "object")).map((item) => ({ name: item.name || "", unit: item.unit || "", price: item.price || "", notes: item.notes || "" })) : [],
+    schedule: saved.schedule && typeof saved.schedule === "object" && !Array.isArray(saved.schedule) ? { ...defaults.schedule, ...saved.schedule } : defaults.schedule,
+    documents: saved.documents && typeof saved.documents === "object" && !Array.isArray(saved.documents) ? saved.documents : {},
+    verificationStatus: saved.verificationStatus === "verified" || saved.verificationStatus === "rejected" ? saved.verificationStatus : "pending",
+  };
+}
+
 type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; onboardingData?: VendorOnboarding };
 type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; account_status: "pending" | "approved" | "suspended"; last_location_at?: string | null };
 
@@ -1829,12 +1846,15 @@ const saveOrderOperation = async (
 }
 
 function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vendor, "id">; products: Product[]; meals: Meal[]; onChange: (vendor: Omit<Vendor, "id">) => void }) {
+  const assignedMealIds = Array.isArray(vendor.mealIds) ? vendor.mealIds : [];
+  const assignedProductIds = Array.isArray(vendor.productIds) ? vendor.productIds : [];
+  const assignedMealPrices = vendor.mealPrices && typeof vendor.mealPrices === "object" ? vendor.mealPrices : {};
   const toggleMeal = (mealId: number) => {
-    const mealIds = vendor.mealIds.includes(mealId) ? vendor.mealIds.filter((id) => id !== mealId) : [...vendor.mealIds, mealId];
+    const mealIds = assignedMealIds.includes(mealId) ? assignedMealIds.filter((id) => id !== mealId) : [...assignedMealIds, mealId];
     onChange({ ...vendor, mealIds });
   };
   const toggleProduct = (productId: string) => {
-    const productIds = vendor.productIds.includes(productId) ? vendor.productIds.filter((id) => id !== productId) : [...vendor.productIds, productId];
+    const productIds = assignedProductIds.includes(productId) ? assignedProductIds.filter((id) => id !== productId) : [...assignedProductIds, productId];
     onChange({ ...vendor, productIds });
   };
 
@@ -1847,20 +1867,20 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
       <input type="number" step="any" min="-90" max="90" placeholder="Pickup latitude" value={vendor.latitude ?? ""} onChange={(event) => onChange({ ...vendor, latitude: event.target.value === "" ? null : Number(event.target.value) })} className="rounded-lg border border-green-200 px-3 py-2" />
       <input type="number" step="any" min="-180" max="180" placeholder="Pickup longitude" value={vendor.longitude ?? ""} onChange={(event) => onChange({ ...vendor, longitude: event.target.value === "" ? null : Number(event.target.value) })} className="rounded-lg border border-green-200 px-3 py-2" />
       <textarea placeholder="Internal notes" value={vendor.notes} onChange={(event) => onChange({ ...vendor, notes: event.target.value })} className="rounded-lg border border-green-200 px-3 py-2 text-sm sm:col-span-2" />
-      <VendorOnboardingEditor value={vendor.onboardingData ?? createEmptyVendorOnboarding()} onChange={(onboardingData) => onChange({ ...vendor, onboardingData })} />
+      <VendorOnboardingEditor value={normalizeVendorOnboarding(vendor.onboardingData)} onChange={(onboardingData) => onChange({ ...vendor, onboardingData })} />
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
-        <legend className="px-1 text-sm font-semibold text-green-900">Cooked Food this vendor offers ({vendor.mealIds.length} selected)</legend>
+        <legend className="px-1 text-sm font-semibold text-green-900">Cooked Food this vendor offers ({assignedMealIds.length} selected)</legend>
         <div className="max-h-40 space-y-1 overflow-y-auto">
           {meals.length ? meals.map((meal) => (
             <div key={meal.id} className="grid grid-cols-[minmax(0,1fr)_9rem] items-center gap-2 rounded px-2 py-1 hover:bg-green-50">
               <label className="flex cursor-pointer items-start gap-2 text-sm font-normal text-gray-800">
-                <input type="checkbox" checked={vendor.mealIds.includes(meal.id)} onChange={() => toggleMeal(meal.id)} className="mt-0.5" />
+                <input type="checkbox" checked={assignedMealIds.includes(meal.id)} onChange={() => toggleMeal(meal.id)} className="mt-0.5" />
                 <span>{meal.category} · {meal.name}</span>
               </label>
-              {vendor.mealIds.includes(meal.id) && (
+              {assignedMealIds.includes(meal.id) && (
                 <label className="text-xs text-gray-600">
                   Vendor price (₦)
-                  <input type="number" min="0" step="0.01" aria-label={`${meal.name} vendor price`} placeholder={`Base ₦${meal.price.toLocaleString()}`} value={vendor.mealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...vendor.mealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+                  <input type="number" min="0" step="0.01" aria-label={`${meal.name} vendor price`} placeholder={`Base ₦${meal.price.toLocaleString()}`} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
                 </label>
               )}
             </div>
@@ -1869,11 +1889,11 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
         <p className="mt-2 text-xs text-gray-500">Leave a vendor price blank to use the standard menu price.</p>
       </fieldset>
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
-        <legend className="px-1 text-sm font-semibold text-green-900">Groceries & Fresh Food this vendor offers ({vendor.productIds.length} selected)</legend>
+        <legend className="px-1 text-sm font-semibold text-green-900">Groceries & Fresh Food this vendor offers ({assignedProductIds.length} selected)</legend>
         <div className="max-h-48 space-y-1 overflow-y-auto">
           {products.length ? products.map((product) => (
             <label key={product.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1 text-sm font-normal text-gray-800 hover:bg-green-50">
-              <input type="checkbox" checked={vendor.productIds.includes(product.id)} onChange={() => toggleProduct(product.id)} className="mt-0.5" />
+              <input type="checkbox" checked={assignedProductIds.includes(product.id)} onChange={() => toggleProduct(product.id)} className="mt-0.5" />
               <span>{product.section === "foodstuff" ? "Groceries" : "Fresh Food"} · {product.name}</span>
             </label>
           )) : <p className="text-sm text-gray-500">No grocery or fresh food products are available to assign.</p>}
