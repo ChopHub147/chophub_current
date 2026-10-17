@@ -293,6 +293,8 @@ const products: FreshProduct[] = [
   { id: "fresh-beef", name: "Beef", category: "Meat & Poultry", unit: "1 kg", price: 8500, description: "Fresh beef cuts for soups and stews.", icon: "🥩", stock: "In stock" },
   { id: "fresh-catfish", name: "Catfish", category: "Fish & Seafood", unit: "1 kg", price: 7500, description: "Fresh catfish cleaned to order.", icon: "🐟", stock: "In stock" },
   { id: "fresh-mackerel", name: "Mackerel", category: "Fish & Seafood", unit: "1 kg", price: 6500, description: "Fresh or frozen mackerel for family meals.", icon: "🐠", stock: "Limited" },
+  { id: "fresh-prawns", name: "Prawns", category: "Fish & Seafood", unit: "1 kg", price: 10000, description: "Fresh prawns for soups, stews, and seafood dishes.", icon: "🦐", stock: "In stock" },
+  { id: "fresh-crabs", name: "Crabs", category: "Fish & Seafood", unit: "1 kg", price: 10000, description: "Fresh crabs for soups, stews, and seafood dishes.", icon: "🦀", stock: "In stock" },
   { id: "fresh-eggs", name: "Chicken eggs", category: "Eggs & Dairy", unit: "1 crate", price: 5500, description: "Fresh eggs for breakfast and baking.", icon: "🥚", stock: "In stock" },
 ];
 
