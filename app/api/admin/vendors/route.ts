@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminCookieName, isValidAdminSession } from "@/lib/admin-auth";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
+import { sendWelcomeEmail } from "@/lib/email";
 
 type VendorPayload = { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; notes?: unknown; active?: unknown; productIds?: unknown; mealIds?: unknown; mealPrices?: unknown; onboardingData?: unknown };
 
@@ -98,7 +99,13 @@ export async function POST(request: Request) {
     vendorId = vendor.id;
     await replaceProducts(vendor.id, productIds(body));
     await replaceMeals(vendor.id, mealIds(body), mealPrices(body));
-    return NextResponse.json({ ...vendor, ...fields, onboardingData: body.onboardingData, productIds: productIds(body), mealIds: mealIds(body), mealPrices: mealPrices(body) });
+    const onboarding = body.onboardingData as { email?: unknown; ownerName?: unknown } | undefined;
+    const vendorEmail = typeof onboarding?.email === "string" ? onboarding.email.trim().toLowerCase() : "";
+    const ownerName = typeof onboarding?.ownerName === "string" && onboarding.ownerName.trim() ? onboarding.ownerName.trim() : fields.name;
+    const welcomeEmailSent = /^\S+@\S+\.\S+$/.test(vendorEmail)
+      ? await sendWelcomeEmail(vendorEmail, ownerName, "vendor")
+      : false;
+    return NextResponse.json({ ...vendor, ...fields, onboardingData: body.onboardingData, productIds: productIds(body), mealIds: mealIds(body), mealPrices: mealPrices(body), welcomeEmailSent });
   } catch (error) {
     if (vendorId !== undefined) await supabaseAdminRequest(`vendors?id=eq.${vendorId}`, { method: "DELETE" }).catch((rollbackError) => console.error("Could not roll back incomplete vendor save", rollbackError));
     console.error("Vendor create request failed", error);

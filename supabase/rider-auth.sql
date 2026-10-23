@@ -1,6 +1,7 @@
 -- Run this once in the Supabase SQL editor to enable rider registration and sign-in.
 alter table public.riders
   add column if not exists password_hash text,
+  add column if not exists email text,
   add column if not exists account_status text not null default 'pending';
 
 alter table public.riders

@@ -13,7 +13,7 @@ const menuLinks = [
   { label: "Fresh Food", href: "/fresh-food" },
   { label: "Full Menu", href: "/menu" },
   { label: "About", href: "/cooked-food#about" },
-  { label: "Contact", href: "/cooked-food#contact" },
+  { label: "Contact", href: "/#contact" },
   { label: "Orders", href: "/orders" },
   { label: "Account", href: "/account" },
 ];

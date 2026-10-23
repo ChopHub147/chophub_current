@@ -18,13 +18,25 @@ values
   (13, 'Rice & Stew', 'Steamed rice with rich, flavorful stew and your choice of protein.', 2000, '/rice_stew.jpg', 'rice', true, 'ChopHub'),
   (14, 'Shawarma', 'The King''s Shawarma, generously filled and freshly prepared.', 6500, '/sharwama.jpeg', 'meat', true, 'ChopHub'),
   (15, 'Parfait', 'A creamy, layered parfait treat.', 5000, '/Parfait.webp', 'dessert', true, 'ChopHub'),
-  (16, 'Abáchà', 'Traditional African salad prepared with delicious local ingredients.', 4000, '/abacha.JPG', 'dessert', true, 'ChopHub')
+  (16, 'Abáchà', 'Traditional African salad prepared with delicious local ingredients.', 4000, '/abacha.JPG', 'dessert', true, 'ChopHub'),
+  (17, 'Plain/White Rice', 'Plain white rice.', 0, '/Long-grain_rice.webp', 'rice', false, 'ChopHub'),
+  (18, 'Goat Meat Pepper Soup', 'Goat meat pepper soup.', 0, '/cooked-food.png', 'pepper-soup', false, 'ChopHub'),
+  (19, 'Chicken Pepper Soup', 'Chicken pepper soup.', 0, '/cooked-food.png', 'pepper-soup', false, 'ChopHub'),
+  (20, 'Catfish Pepper Soup', 'Catfish pepper soup.', 0, '/cooked-food.png', 'pepper-soup', false, 'ChopHub'),
+  (21, 'Pasta with Chicken', 'Pasta with chicken.', 0, '/cooked-food.png', 'pasta', false, 'ChopHub'),
+  (22, 'Rice & Chicken Stew', 'Steamed white rice served with chicken stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub'),
+  (23, 'Rice & Goat Meat Stew', 'Steamed white rice served with goat meat stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub'),
+  (24, 'Rice & Beef Stew', 'Steamed white rice served with beef stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub')
 on conflict (id) do update set
   name = excluded.name,
   description = excluded.description,
   price = excluded.price,
   image = excluded.image,
   category = excluded.category,
+  available = case
+    when excluded.id between 17 and 24 then false
+    else public.meals.available
+  end,
   vendor_name = excluded.vendor_name;
 
 select setval(

@@ -926,11 +926,13 @@ function RiderAccess({ onSignedIn }: { onSignedIn: (rider: RiderIdentity) => voi
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [baseArea, setBaseArea] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [pendingEmailSent, setPendingEmailSent] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -940,11 +942,12 @@ function RiderAccess({ onSignedIn }: { onSignedIn: (rider: RiderIdentity) => voi
       const response = await fetch(mode === "signup" ? "/api/rider/signup" : "/api/rider/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "signup" ? { name, phone, baseArea, password } : { phone, password }),
+        body: JSON.stringify(mode === "signup" ? { name, phone, email, baseArea, password } : { phone, password }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "We could not complete that request.");
       if (mode === "signup") {
+        setPendingEmailSent(Boolean(result.welcomeEmailSent));
         setPending(true);
       } else {
         onSignedIn(result.rider as RiderIdentity);
@@ -966,7 +969,7 @@ function RiderAccess({ onSignedIn }: { onSignedIn: (rider: RiderIdentity) => voi
         {pending ? (
           <div role="status" className="rounded-2xl bg-emerald-50 p-5 text-emerald-950">
             <p className="text-lg font-bold">Application received</p>
-            <p className="mt-2 text-sm leading-6 text-emerald-900">Your rider account is pending ChopHub approval. You can sign in after an admin approves your account.</p>
+            <p className="mt-2 text-sm leading-6 text-emerald-900">Your rider account is pending ChopHub approval. You can sign in after an admin approves your account. {pendingEmailSent ? "We’ve also sent a welcome message to your email." : "We couldn’t send the welcome email, but your application was received."}</p>
             <button type="button" onClick={() => { setPending(false); setMode("signin"); setPassword(""); }} className="mt-4 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Back to sign in</button>
           </div>
         ) : (
@@ -977,6 +980,7 @@ function RiderAccess({ onSignedIn }: { onSignedIn: (rider: RiderIdentity) => voi
             <form onSubmit={submit} className="mt-5 space-y-3">
               {mode === "signup" && <>
                 <label className="block text-sm font-semibold text-slate-700">Full name<input required autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" /></label>
+                <label className="block text-sm font-semibold text-slate-700">Email address<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" /></label>
                 <label className="block text-sm font-semibold text-slate-700">Base area<input autoComplete="address-level2" value={baseArea} onChange={(event) => setBaseArea(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" placeholder="e.g. Calabar South" /></label>
               </>}
               <label className="block text-sm font-semibold text-slate-700">Phone number<input required type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal" /></label>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
+import { getMealCatalog } from "@/lib/meals";
 
 type Meal = {
   id: number;
@@ -9,6 +10,7 @@ type Meal = {
   image: string;
   category: string;
   available: boolean;
+  vendors?: Array<{ id: number; name: string; price: number }>;
 };
 
 type Product = {
@@ -27,6 +29,8 @@ const categoryLabels: Record<string, string> = {
   "soup-swallow": "Soup and Swallow",
   meat: "Meat",
   rice: "Rice",
+  "pepper-soup": "Pepper Soup",
+  pasta: "Pasta",
   dessert: "Dessert",
 };
 
@@ -38,6 +42,14 @@ const fallbackMeals: Meal[] = [
   { id: 12, name: "Jollof Rice", description: "Fragrant party-style jollof rice served plain or with protein.", price: 2000, image: "/jollof.jpg", category: "rice", available: true },
   { id: 13, name: "Rice & Stew", description: "Steamed rice with rich, flavorful stew and protein.", price: 2000, image: "/rice_stew.jpg", category: "rice", available: true },
   { id: 15, name: "Parfait", description: "A creamy, layered parfait treat.", price: 5000, image: "/Parfait.webp", category: "dessert", available: true },
+  { id: 17, name: "Plain/White Rice", description: "Plain white rice.", price: 0, image: "/Long-grain_rice.webp", category: "rice", available: false },
+  { id: 18, name: "Goat Meat Pepper Soup", description: "Goat meat pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
+  { id: 19, name: "Chicken Pepper Soup", description: "Chicken pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
+  { id: 20, name: "Catfish Pepper Soup", description: "Catfish pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
+  { id: 21, name: "Pasta with Chicken", description: "Pasta with chicken.", price: 0, image: "/cooked-food.png", category: "pasta", available: false },
+  { id: 22, name: "Rice & Chicken Stew", description: "Steamed white rice served with chicken stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
+  { id: 23, name: "Rice & Goat Meat Stew", description: "Steamed white rice served with goat meat stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
+  { id: 24, name: "Rice & Beef Stew", description: "Steamed white rice served with beef stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
 ];
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -49,7 +61,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
   try {
     const [databaseMeals, databaseProducts] = await Promise.all([
-      supabaseAdminRequest<Meal[]>("meals?select=id,name,description,price,image,category,available&order=id.asc"),
+      getMealCatalog(),
       supabaseAdminRequest<Product[]>("products?select=id,name,description,category,section,unit,price,image,stock_status&order=section.asc,id.asc"),
     ]);
     if (databaseMeals.length > 0) meals = databaseMeals;
@@ -89,7 +101,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         <div className="mt-5 grid gap-8 lg:grid-cols-3">
           <SearchGroup title="Cooked Food" href="/menu" accent="green" count={matchingMeals.length}>
             {matchingMeals.map((meal) => (
-              <SearchCard key={meal.id} name={meal.name} description={meal.description} price={meal.price} image={meal.image} href={`/menu?category=${meal.category}`} available={meal.available} />
+              <SearchCard key={meal.id} name={meal.name} description={meal.description} price={meal.vendors?.length ? Math.min(...meal.vendors.map((vendor) => vendor.price)) : meal.price > 0 ? meal.price : null} image={meal.image} href={`/menu?category=${meal.category}`} available={meal.available} />
             ))}
           </SearchGroup>
           <SearchGroup title="Groceries" href="/foodstuff" accent="amber" count={matchingGroceries.length}>
@@ -127,7 +139,7 @@ function SearchGroup({ title, href, accent, count, children }: { title: string; 
   );
 }
 
-function SearchCard({ name, description, price, image, href, available, unit }: { name: string; description: string; price: number; image: string; href: string; available: boolean; unit?: string }) {
+function SearchCard({ name, description, price, image, href, available, unit }: { name: string; description: string; price: number | null; image: string; href: string; available: boolean; unit?: string }) {
   return (
     <Link href={href} className="flex gap-3 rounded-xl border border-black/5 p-3 transition hover:bg-[#f5fbf5]">
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5fbf5] text-3xl">
@@ -136,7 +148,7 @@ function SearchCard({ name, description, price, image, href, available, unit }: 
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-bold">{name}</h3>
-          <span className="shrink-0 text-sm font-bold text-[#07833f]">₦{price.toLocaleString()}</span>
+          <span className="shrink-0 text-sm font-bold text-[#07833f]">{price === null ? "Price set by vendor" : `₦${price.toLocaleString()}`}</span>
         </div>
         {unit && <p className="text-xs text-[#718087]">{unit}</p>}
         <p className="mt-1 text-xs text-[#53625d]">{description}</p>

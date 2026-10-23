@@ -105,7 +105,7 @@ function parseMealUnitPrice(meal: { id: number; name: string; price: number; cat
   return price;
 }
 
-export async function priceCheckoutItems(input: unknown, selectedVendorByItem: Record<string, number> = {}): Promise<{ items: PricedCheckoutItem[]; foodSubtotal: number }> {
+export async function priceCheckoutItems(input: unknown, selectedVendorByItem: Record<string, number> = {}, allowUnassignedMealPricing = false): Promise<{ items: PricedCheckoutItem[]; foodSubtotal: number }> {
   if (!Array.isArray(input) || input.length === 0 || input.length > 80) throw new CheckoutError("Your cart is empty or contains too many items.");
   const items = input.map((value) => {
     if (typeof value !== "object" || value === null) throw new CheckoutError("One of the cart items is invalid.");
@@ -142,12 +142,15 @@ export async function priceCheckoutItems(input: unknown, selectedVendorByItem: R
     if (mealId) {
       const meal = mealById.get(mealId);
       if (!meal || !meal.available) throw new CheckoutError(`${meal?.name || "A meal in your cart"} is no longer available.`, 409);
-      let vendorPrice = meal.price;
-      if (item.vendorId) {
-        const assignmentPrice = vendorPriceByMeal.get(`${item.vendorId}:${meal.id}`);
-        if (!activeVendorIds.has(item.vendorId) || assignmentPrice === undefined) throw new CheckoutError(`That vendor is no longer available for ${meal.name}. Please choose another vendor.`, 409);
-        vendorPrice = assignmentPrice === null ? meal.price : Number(assignmentPrice);
+      if (!item.vendorId && allowUnassignedMealPricing) {
+        return { ...item, price: Number(meal.price), name: item.name, isMeal: true };
       }
+      if (!item.vendorId) throw new CheckoutError(`Choose a vendor for ${meal.name} before ordering.`, 409);
+      let vendorPrice = meal.price;
+      const assignmentPrice = vendorPriceByMeal.get(`${item.vendorId}:${meal.id}`);
+      if (!activeVendorIds.has(item.vendorId) || assignmentPrice === undefined) throw new CheckoutError(`That vendor is no longer available for ${meal.name}. Please choose another vendor.`, 409);
+      vendorPrice = assignmentPrice === null ? meal.price : Number(assignmentPrice);
+      if (!Number.isFinite(vendorPrice) || vendorPrice <= 0) throw new CheckoutError(`That vendor has not set a valid price for ${meal.name}. Please choose another vendor.`, 409);
       return { ...item, price: parseMealUnitPrice({ ...meal, price: vendorPrice }, item), name: item.name, isMeal: true };
     }
     const product = productById.get(item.id);
@@ -230,12 +233,18 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const uniqueItems = [...new Map(input.items.map((item) => [itemAssignmentKey(item), item])).values()];
   const mealIds = [...new Set(uniqueItems.map((item) => /^([0-9]+)(?:-|$)/.exec(item.id)?.[1]).filter((id): id is string => Boolean(id)))];
   const productIds = uniqueItems.filter((item) => !/^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.id);
-  const [mealAssignments, productAssignments] = await Promise.all([
-    mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&select=vendor_id,meal_id`) : Promise.resolve([]),
+  const [mealAssignments, productAssignments, mealRows] = await Promise.all([
+    mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&select=vendor_id,meal_id,price`) : Promise.resolve([]),
     productIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; product_id: string }>>(`vendor_products?product_id=in.(${productIds.join(",")})&select=vendor_id,product_id`) : Promise.resolve([]),
+    mealIds.length ? supabaseAdminRequest<Array<{ id: number; price: number }>>(`meals?id=in.(${mealIds.join(",")})&select=id,price`) : Promise.resolve([]),
   ]);
+  const baseMealPriceById = new Map(mealRows.map((meal) => [meal.id, Number(meal.price)]));
   const assignmentsByItem = new Map<string, Set<number>>();
-  for (const assignment of mealAssignments) { const key = `meal:${assignment.meal_id}`; assignmentsByItem.set(key, assignmentsByItem.get(key) ?? new Set()); assignmentsByItem.get(key)?.add(assignment.vendor_id); }
+  for (const assignment of mealAssignments) {
+    const effectivePrice = assignment.price === null ? baseMealPriceById.get(assignment.meal_id) : Number(assignment.price);
+    if (!Number.isFinite(effectivePrice) || Number(effectivePrice) <= 0) continue;
+    const key = `meal:${assignment.meal_id}`; assignmentsByItem.set(key, assignmentsByItem.get(key) ?? new Set()); assignmentsByItem.get(key)?.add(assignment.vendor_id);
+  }
   for (const assignment of productAssignments) { const key = `product:${assignment.product_id}`; assignmentsByItem.set(key, assignmentsByItem.get(key) ?? new Set()); assignmentsByItem.get(key)?.add(assignment.vendor_id); }
   const vendorIds = [...new Set([...assignmentsByItem.values()].flatMap((ids) => [...ids]))];
   if (!vendorIds.length) throw new CheckoutError("We couldn’t prepare delivery pricing for this cart yet. Please try again shortly.", 409);

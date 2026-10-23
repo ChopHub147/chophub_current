@@ -4,6 +4,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 Staff sign in at `/agent`. Configure `AGENT_EMAIL` and `AGENT_PASSWORD` on the server to provision the staff account. The portal can coordinate order dispatch, contact active vendors, and assign approved riders; admin credentials and catalog management remain separate. Staff sessions are signed with `ADMIN_SESSION_SECRET` and expire after eight hours.
 
+## Welcome emails
+
+Customer signups, new vendor records, and rider applications send role-specific welcome messages through Resend. Set `RESEND_API_KEY` in the local environment and in the production deployment environment, and verify the `chophub.ng` domain in Resend for the configured sender `hello@chophub.ng`. Email delivery is best-effort: signup/application creation still succeeds if the email provider is unavailable. Vendor welcome emails use the owner email in the vendor onboarding details; rider signup requires an email address.
+
+For existing Supabase databases, apply `supabase/rider-auth.sql` to add the rider email column before deploying the updated rider signup flow. New database setups should use the updated `supabase/catalog-products.sql` schema as well.
+
 ## Product options and subcategories
 
 To save product subcategories and custom sizes or varieties, apply the updated `supabase/catalog-products.sql` in the Supabase SQL editor. Admins can then add subcategories and named options with individual prices from the Products section. Custom options replace the automatic grocery size suggestions for that product.

@@ -635,7 +635,7 @@ export default function AdminDashboard({
     setVendorSavedMessage("");
     try {
       const response = await fetch("/api/admin/vendors", { method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vendor) });
-      const result = await response.json().catch(() => ({})) as Vendor & { error?: string };
+      const result = await response.json().catch(() => ({})) as Vendor & { error?: string; welcomeEmailSent?: boolean };
       if (!response.ok) {
         setVendorError(result.error || "Vendor details could not be saved. Check that the vendor tables and onboarding migration are installed in Supabase.");
       } else {
@@ -646,7 +646,8 @@ export default function AdminDashboard({
         } else {
           setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds, onboardingData: saved.onboardingData || item.onboardingData } : item));
         }
-        setVendorSavedMessage(`${saved.name || vendor.name} saved with ${saved.productIds?.length ?? vendor.productIds.length} grocery/fresh food items and ${saved.mealIds?.length ?? vendor.mealIds.length} cooked meals assigned.`);
+        const emailStatus = isNew ? (result.welcomeEmailSent ? " A vendor welcome email was sent." : " No welcome email was sent; check the vendor email and Resend configuration.") : "";
+        setVendorSavedMessage(`${saved.name || vendor.name} saved with ${saved.productIds?.length ?? vendor.productIds.length} grocery/fresh food items and ${saved.mealIds?.length ?? vendor.mealIds.length} cooked meals assigned.${emailStatus}`);
       }
     } catch {
       setVendorError("ChopHub could not reach the server. Check that the local app is running, then try again.");
@@ -1880,13 +1881,13 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
               {assignedMealIds.includes(meal.id) && (
                 <label className="text-xs text-gray-600">
                   Vendor price (₦)
-                  <input type="number" min="0" step="0.01" aria-label={`${meal.name} vendor price`} placeholder={`Base ₦${meal.price.toLocaleString()}`} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+                  <input type="number" min={meal.price > 0 ? 0 : 0.01} step="0.01" aria-label={`${meal.name} vendor price`} placeholder={meal.price > 0 ? `Base ₦${meal.price.toLocaleString()}` : "Required vendor price"} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
                 </label>
               )}
             </div>
           )) : <p className="text-sm text-gray-500">No cooked meals are available to assign.</p>}
         </div>
-        <p className="mt-2 text-xs text-gray-500">Leave a vendor price blank to use the standard menu price.</p>
+        <p className="mt-2 text-xs text-gray-500">A blank vendor price uses the base menu price, when one exists. Meals with a ₦0 base price need a positive vendor price and must also be marked available before customers can order them.</p>
       </fieldset>
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
         <legend className="px-1 text-sm font-semibold text-green-900">Groceries & Fresh Food this vendor offers ({assignedProductIds.length} selected)</legend>

@@ -30,7 +30,7 @@ const cartStorageKey = "chophub-cart";
 
 type ProductSeed = readonly [string, string, string, string, number, string, string];
 
-const products: Product[] = ([
+const products: Product[] = [...([
   ["garri", "Garri", "Grains & Staples", "1 kg", 1800, "Crispy cassava flakes for drinks, soaking, and meals.", "🌾"],
   ["long-rice", "Long-grain rice", "Grains & Staples", "5 kg", 12500, "Everyday rice for family meals and special dishes.", "🍚"],
   ["ofada-rice", "Ofada rice", "Grains & Staples", "1 kg", 4200, "Locally grown aromatic rice, perfect with traditional sauces.", "🍚"],
@@ -150,7 +150,18 @@ const products: Product[] = ([
   ["mosquito-coils", "Mosquito coils", "Household", "Pack", 1000, "Convenient household mosquito protection for outdoor and indoor use.", "🌀"],
   ["air-freshener", "Air freshener", "Household", "300 ml", 1800, "Helps keep rooms smelling fresh and pleasant.", "🌿"],
   ["laundry-pegs", "Laundry pegs", "Household", "Pack", 900, "Reusable pegs for hanging and drying clothes.", "📌"],
-] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, subcategory: "", pack, price, description, icon, available: true, variant_options: [] }));
+] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, subcategory: "", pack, price, description, icon, available: true, variant_options: [] })), {
+  id: "foodstuff-ensure",
+  name: "Ensure",
+  category: "Beverages",
+  subcategory: "",
+  pack: "Various sizes",
+  price: 0,
+  description: "American brand of complete, balanced nutrition drinks, meal replacements, and powders, owned by Abbott Laboratories.",
+  icon: "🥤",
+  available: false,
+  variant_options: [],
+}];
 
 const groceryPhotos = {
   garri: "https://homefoodly.com/cdn/shop/files/7259.jpg?v=1752598574",

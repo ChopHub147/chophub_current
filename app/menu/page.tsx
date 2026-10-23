@@ -1,15 +1,6 @@
 import Link from "next/link";
+import { getMealCatalog } from "@/lib/meals";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
-
-type DatabaseMeal = {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  image: string;
-  category: string;
-  available: boolean;
-};
 
 type MenuDish = [string, number, string, string, string, boolean?];
 
@@ -30,6 +21,14 @@ const dishes: MenuDish[] = [
   ["Parfait", 5000, "A creamy, layered parfait treat.", "/Parfait.webp", "dessert"],
   ["Fresh Roasted Fish", 8000, "Well-seasoned roasted fish served with spicy pepper sauce.", "/grilled_fish.JPG", "meat"],
   ["Abáchà", 4000, "Traditional African salad prepared with delicious local ingredients.", "/abacha.JPG", "dessert"],
+  ["Plain/White Rice", 0, "Plain white rice.", "/Long-grain_rice.webp", "rice", false],
+  ["Goat Meat Pepper Soup", 0, "Goat meat pepper soup.", "/cooked-food.png", "pepper-soup", false],
+  ["Chicken Pepper Soup", 0, "Chicken pepper soup.", "/cooked-food.png", "pepper-soup", false],
+  ["Catfish Pepper Soup", 0, "Catfish pepper soup.", "/cooked-food.png", "pepper-soup", false],
+  ["Pasta with Chicken", 0, "Pasta with chicken.", "/cooked-food.png", "pasta", false],
+  ["Rice & Chicken Stew", 0, "Steamed white rice served with chicken stew.", "/rice_stew.jpg", "rice", false],
+  ["Rice & Goat Meat Stew", 0, "Steamed white rice served with goat meat stew.", "/rice_stew.jpg", "rice", false],
+  ["Rice & Beef Stew", 0, "Steamed white rice served with beef stew.", "/rice_stew.jpg", "rice", false],
 ];
 
 const dishIds: Record<string, number> = {
@@ -49,12 +48,22 @@ const dishIds: Record<string, number> = {
   Shawarma: 14,
   Parfait: 15,
   "Abáchà": 16,
+  "Plain/White Rice": 17,
+  "Goat Meat Pepper Soup": 18,
+  "Chicken Pepper Soup": 19,
+  "Catfish Pepper Soup": 20,
+  "Pasta with Chicken": 21,
+  "Rice & Chicken Stew": 22,
+  "Rice & Goat Meat Stew": 23,
+  "Rice & Beef Stew": 24,
 };
 
 const defaultCategoryNames: Record<string, string> = {
   "soup-swallow": "Soup and Swallow",
   meat: "Meat",
   rice: "Rice",
+  "pepper-soup": "Pepper Soup",
+  pasta: "Pasta",
   dessert: "Dessert",
 };
 
@@ -75,12 +84,10 @@ export default async function MenuPage({
   const ratingTotals = new Map<number, { total: number; count: number }>();
 
   try {
-    const meals = await supabaseAdminRequest<DatabaseMeal[]>(
-      "meals?select=id,name,description,price,image,category,available&order=id.asc"
-    );
+    const meals = await getMealCatalog();
     menuDishes = meals.map((meal) => [
       meal.name,
-      meal.price,
+      meal.vendors.length ? Math.min(...meal.vendors.map((vendor) => vendor.price)) : meal.price,
       meal.description,
       meal.image,
       meal.category,
@@ -163,13 +170,13 @@ export default async function MenuPage({
                 <div className="flex justify-between gap-2 items-start">
                   <h2 className="font-bold text-sm md:text-base text-green-900">{name}</h2>
                   <span className="text-xs md:text-sm font-bold text-green-700 whitespace-nowrap">
-                    ₦{price.toLocaleString()}
+                    {price > 0 ? `₦${price.toLocaleString()}` : "Price set by vendor"}
                   </span>
                 </div>
                 <p className="text-xs md:text-sm text-gray-600 mt-2">{description}</p>
                 {ratingTotals.has(dishIds[name]) && <p className="mt-2 text-xs font-semibold text-amber-700">★ {(ratingTotals.get(dishIds[name])!.total / ratingTotals.get(dishIds[name])!.count).toFixed(1)} <span className="font-normal text-gray-500">({ratingTotals.get(dishIds[name])!.count} verified rating{ratingTotals.get(dishIds[name])!.count === 1 ? "" : "s"})</span></p>}
                 {!available && <p className="mt-3 text-sm font-semibold text-red-600">Currently unavailable</p>}
-                {available ? (
+                {available && price > 0 ? (
                   <Link
                     href={`/cooked-food?dish=${dishIds[name]}&returnCategory=${category ?? ""}#menu`}
                     className="mt-4 block rounded-full bg-green-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-green-700"

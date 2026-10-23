@@ -62,7 +62,7 @@ type Dish = {
   price: number;
   desc: string;
   image: string;
-  type: "soup" | "meat" | "fish" | "rice" | "special";
+  type: "soup" | "meat" | "fish" | "rice" | "plain" | "special";
   available?: boolean;
   sectionTitle?: string;
   vendors?: MealVendorOption[];
@@ -310,17 +310,35 @@ export default function CookedFoodPage() {
       type: "special" as const,
       sectionTitle: "Abáchà",
     },
+    {
+      id: 17,
+      name: "Plain/White Rice",
+      price: 0,
+      desc: "Plain white rice.",
+      image: "/Long-grain_rice.webp",
+      type: "plain",
+      available: false,
+    },
+    { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 21, name: "Pasta with Chicken", price: 0, desc: "Pasta with chicken.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
     ["soup-swallow", "Soup and Swallow"],
     ["meat", "Meat"],
     ["rice", "Rice"],
+    ["pepper-soup", "Pepper Soup"],
+    ["pasta", "Pasta"],
     ["dessert", "Dessert"],
   ]);
 
   const featuredDishes = dishes.filter((dish) =>
-    [1, 3, 12, 15].includes(dish.id)
+    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24].includes(dish.id)
   );
 
   const [selectedSwallow, setSelectedSwallow] = useState<Record<number, string>>({});
@@ -349,14 +367,15 @@ export default function CookedFoodPage() {
           "soup-swallow": "Soup and Swallow",
           meat: "Meat",
           rice: "Rice",
+          "pepper-soup": "Pepper Soup",
+          pasta: "Pasta",
           dessert: "Dessert",
         };
         const categories = [...new Set(meals.map((meal) => meal.category.trim()).filter(Boolean))]
           .sort((a, b) => a.localeCompare(b))
           .map((category) => [category, categoryNames[category] ?? category.split(/[-_\\s]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")] as [string, string]);
         setMealCategories(categories);
-        setDishes(
-          meals.map((meal) => ({
+        const nextDishes = meals.map((meal) => ({
             id: meal.id,
             name: meal.name,
             price: meal.price,
@@ -367,14 +386,15 @@ export default function CookedFoodPage() {
             type: (meal.category === "soup-swallow"
               ? "soup"
               : meal.category === "rice"
-                ? "rice"
+                ? meal.name === "Plain/White Rice" ? "plain" : "rice"
                 : meal.name === "Fresh Roasted Fish"
                   ? "fish"
                   : meal.category === "meat"
                     ? "meat"
                     : "special") as Dish["type"],
-          }))
-        );
+          }));
+        setDishes(nextDishes);
+        setCustomizingDish((current) => current ? nextDishes.find((dish) => dish.id === current.id) ?? current : current);
       })
       .catch(() => {
         // Keep the bundled menu available if the database is temporarily unavailable.
@@ -466,7 +486,7 @@ export default function CookedFoodPage() {
     const body = encodeURIComponent(
       `Name: ${contactName}\nPhone or email: ${contactDetails}\n\n${contactMessage}`
     );
-    window.location.href = `mailto:chophub@aol.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:support@chophub.ng?subject=${subject}&body=${body}`;
   };
 
   const openCustomization = (dish: (typeof dishes)[0]) => {
@@ -492,6 +512,10 @@ export default function CookedFoodPage() {
   };
 
   const addToCart = (dish: (typeof dishes)[0], quantity = 1) => {
+    if (dish.available === false) {
+      alert("This meal is unavailable until a vendor and valid price are assigned.");
+      return;
+    }
     if (dish.type === "soup" && !selectedSwallow[dish.id]) {
       alert("Please choose your swallow first.");
       return;
@@ -536,7 +560,12 @@ export default function CookedFoodPage() {
 
     const selectedVendorId = selectedVendorByDish[dish.id] ?? null;
     const selectedVendor = dish.vendors?.find((vendor) => vendor.id === selectedVendorId);
-    const baseMealPrice = selectedVendor?.price ?? dish.price;
+    const vendorPrices = dish.vendors?.map((vendor) => vendor.price).filter((price) => Number.isFinite(price) && price > 0) ?? [];
+    const baseMealPrice = selectedVendor?.price ?? (vendorPrices.length ? Math.min(...vendorPrices) : dish.price);
+    if (!Number.isFinite(baseMealPrice) || baseMealPrice <= 0) {
+      alert("This meal is unavailable until a vendor assigns a valid price.");
+      return;
+    }
     const itemPrice =
       dish.type === "soup"
         ? baseMealPrice + (swallowOptions.find((option) => option.name === swallow)?.price ?? 0)
@@ -924,7 +953,13 @@ export default function CookedFoodPage() {
                         {dish.name}
                       </h3>
                       <span className="text-green-700 font-bold text-xs md:text-base">
-                        {dish.type === "rice" || (dish.vendors?.length ?? 0) > 0 ? "From " : ""}₦{Math.min(dish.price, ...(dish.vendors?.map((vendor) => vendor.price) ?? [])).toLocaleString()}
+                        {(() => {
+                          const validVendorPrices = dish.vendors?.map((vendor) => vendor.price).filter((price) => Number.isFinite(price) && price > 0) ?? [];
+                          const displayPrice = validVendorPrices.length ? Math.min(...validVendorPrices) : dish.price;
+                          return displayPrice > 0
+                            ? `${dish.type === "rice" || validVendorPrices.length > 0 ? "From " : ""}₦${displayPrice.toLocaleString()}`
+                            : "Price set by vendor";
+                        })()}
                       </span>
                   </div>
                   {dish.available === false && (
@@ -1017,7 +1052,14 @@ export default function CookedFoodPage() {
                   {customizingDish.name}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Price: ₦{(customizingDish.vendors?.find((vendor) => vendor.id === (selectedVendorByDish[customizingDish.id] ?? null))?.price ?? customizingDish.price).toLocaleString()}
+                  {(() => {
+                    const selectedVendor = customizingDish.vendors?.find((vendor) => vendor.id === (selectedVendorByDish[customizingDish.id] ?? null));
+                    const availablePrices = customizingDish.vendors?.map((vendor) => vendor.price).filter((price) => price > 0) ?? [];
+                    const price = selectedVendor?.price ?? (availablePrices.length ? Math.min(...availablePrices) : customizingDish.price);
+                    return price > 0
+                      ? `${selectedVendor ? "Price" : "From"}: ₦${price.toLocaleString()}`
+                      : "Price set by vendor before ordering";
+                  })()}
                 </p>
               </div>
               <button
@@ -1338,7 +1380,9 @@ export default function CookedFoodPage() {
                             {item.name}
                           </h3>
                           <p className="text-green-700 font-medium">
-                            ₦{(quoteItem?.isMeal ? quoteItem.price : item.price).toLocaleString()} / portion
+                            {(quoteItem?.isMeal ? quoteItem.price : item.price) > 0
+                              ? `₦${(quoteItem?.isMeal ? quoteItem.price : item.price).toLocaleString()} / portion`
+                              : "Price set by vendor before ordering"}
                           </p>
                           <p className="mt-1 text-xs text-gray-500">Vendor: {item.vendorName ?? quoteVendor?.vendorName ?? "Nearest vendor (automatic)"}</p>
                           <div className="flex items-center gap-3 mt-2">
@@ -1448,7 +1492,7 @@ export default function CookedFoodPage() {
                       >
                         {deliveryCoordinates ? "Delivery location saved ✓" : "Use this phone’s location for delivery"}
                       </button>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-sm text-gray-600">
                         Use this only if the device is at the delivery address. Otherwise, enter the full address above; we’ll look it up for you to confirm.
                       </p>
                       {customerProfile && <label className="mt-3 flex items-start gap-2 text-sm text-green-900"><input type="checkbox" checked={saveAddressAsDefault} onChange={(event) => setSaveAddressAsDefault(event.target.checked)} className="mt-1" /><span>Save this as my default delivery address for next time.</span></label>}
@@ -1482,7 +1526,13 @@ export default function CookedFoodPage() {
                 <div className="space-y-2 mb-4 text-sm">
                   <div className="flex justify-between">
                     <span>Food subtotal</span>
-                    <span className="font-semibold">₦{Number(checkoutQuote?.foodSubtotal ?? totalPrice).toLocaleString()}</span>
+                    <span className="font-semibold">
+                      {checkoutQuote
+                        ? `₦${Number(checkoutQuote.foodSubtotal).toLocaleString()}`
+                        : cart.some((item) => item.price <= 0)
+                          ? "Vendor price required"
+                          : `₦${Number(totalPrice).toLocaleString()}`}
+                    </span>
                   </div>
                   {checkoutQuote ? <>
                     <div className="flex justify-between text-gray-600"><span>Pickup route ({checkoutQuote.routeDistanceKm} km)</span><span>₦{Number(checkoutQuote.fees.deliveryFee).toLocaleString()}</span></div>
@@ -1554,14 +1604,14 @@ export default function CookedFoodPage() {
                 </p>
                 <p>
                   <span className="block text-sm font-semibold text-green-800">Phone</span>
-                  <a href="tel:+2348137963930" className="hover:text-green-700">
-                    +234 813 796 3930
+                  <a href="tel:+2349036942667" className="hover:text-green-700">
+                    +234 903 694 2667
                   </a>
                 </p>
                 <p>
                   <span className="block text-sm font-semibold text-green-800">Email</span>
-                  <a href="mailto:chophub@aol.com" className="hover:text-green-700">
-                    chophub@aol.com
+                  <a href="mailto:support@chophub.ng" className="hover:text-green-700">
+                    support@chophub.ng
                   </a>
                 </p>
                 <p>
@@ -1591,7 +1641,16 @@ export default function CookedFoodPage() {
                   >
                     Facebook
                   </a>
-                  {" · Instagram · TikTok: @chophub"}
+                  {" · "}
+                  <a
+                    href="https://www.instagram.com/chophub.ng/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-green-700"
+                  >
+                    Instagram
+                  </a>
+                  {" · TikTok: @chophub"}
                 </p>
               </div>
             </div>

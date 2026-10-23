@@ -4,7 +4,7 @@ import { CheckoutError, getDeliveryQuote, priceCheckoutItems, signCheckoutQuote 
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { items?: unknown; latitude?: unknown; longitude?: unknown; deliveryAddress?: unknown; deliveryArea?: unknown };
-    const { items: initialItems } = await priceCheckoutItems(body.items);
+    const { items: initialItems } = await priceCheckoutItems(body.items, {}, true);
     const deliveryQuote = await getDeliveryQuote({ items: initialItems, latitude: body.latitude, longitude: body.longitude, address: body.deliveryAddress, area: body.deliveryArea });
     const selectedVendorByItem = Object.fromEntries(deliveryQuote.selectedVendors.map(({ itemId, vendorId }) => [itemId, vendorId]));
     const { items, foodSubtotal } = await priceCheckoutItems(body.items, selectedVendorByItem);

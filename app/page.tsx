@@ -40,6 +40,28 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-5 pb-4 pt-10 sm:px-8 sm:pt-14"><h2 className="text-2xl font-black tracking-tight text-[#14252a]">Why Shop on ChopHub?</h2><div className="mt-6 grid grid-cols-2 gap-y-6 sm:grid-cols-4">{benefits.map(([icon, title, subtitle, color]) => <div key={title} className="text-center"><span className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${color}`}>{icon}</span><p className="mt-3 text-sm font-bold text-[#14252a]">{title}<br /><span className="font-normal">{subtitle}</span></p></div>)}</div></section>
 
+      <section id="contact" className="mx-auto mt-10 max-w-6xl scroll-mt-8 px-5 pb-12 sm:px-8 sm:pb-16">
+        <div className="rounded-[1.8rem] bg-[#073b23] px-6 py-8 text-white sm:px-10 sm:py-10">
+          <div className="grid gap-8 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8e7b7]">We’re here to help</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight">Contact us</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">Questions about an order? Get in touch with the ChopHub team. Serving Calabar Municipal and Calabar South, 24/7.</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <a href="https://wa.me/2348081688937" target="_blank" rel="noreferrer" className="rounded-full bg-white px-5 py-3 text-sm font-bold text-[#073b23] transition hover:bg-[#e8f9e9]">WhatsApp us</a>
+              <a href="mailto:support@chophub.ng" className="rounded-full border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Email us</a>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/20 pt-5 text-sm text-white/80">
+            <a href="tel:+2349036942667" className="hover:text-white">+234 903 694 2667</a>
+            <a href="mailto:support@chophub.ng" className="hover:text-white">support@chophub.ng</a>
+            <a href="https://www.facebook.com/share/1BW844CEN9/?mibextid=wwXIfr" target="_blank" rel="noreferrer" className="hover:text-white">Facebook</a>
+            <a href="https://www.instagram.com/chophub.ng/" target="_blank" rel="noreferrer" className="hover:text-white">Instagram: @chophub.ng</a>
+          </div>
+        </div>
+      </section>
+
     </main>
   );
 }
