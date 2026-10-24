@@ -326,6 +326,7 @@ export default function CookedFoodPage() {
     { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "special", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
@@ -335,10 +336,11 @@ export default function CookedFoodPage() {
     ["pepper-soup", "Pepper Soup"],
     ["pasta", "Pasta"],
     ["dessert", "Dessert"],
+    ["seafood", "Seafood"],
   ]);
 
   const featuredDishes = dishes.filter((dish) =>
-    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24].includes(dish.id)
+    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25].includes(dish.id)
   );
 
   const [selectedSwallow, setSelectedSwallow] = useState<Record<number, string>>({});
@@ -370,6 +372,7 @@ export default function CookedFoodPage() {
           "pepper-soup": "Pepper Soup",
           pasta: "Pasta",
           dessert: "Dessert",
+          seafood: "Seafood",
         };
         const categories = [...new Set(meals.map((meal) => meal.category.trim()).filter(Boolean))]
           .sort((a, b) => a.localeCompare(b))

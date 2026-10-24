@@ -54,6 +54,7 @@ values
   ('fresh-mackerel', 'Mackerel', 'Fresh or frozen mackerel for family meals.', 'Fish & Seafood', 'fresh-food', '1 kg', 6500, '🐠', 'limited'),
   ('fresh-prawns', 'Prawns', 'Fresh prawns for soups, stews, and seafood dishes.', 'Fish & Seafood', 'fresh-food', '1 kg', 10000, '🦐', 'in_stock'),
   ('fresh-crabs', 'Crabs', 'Fresh crabs for soups, stews, and seafood dishes.', 'Fish & Seafood', 'fresh-food', '1 kg', 10000, '🦀', 'in_stock'),
+  ('fresh-snails', 'Fresh snails', 'Fresh snails for soups and other seafood dishes.', 'Fish & Seafood', 'fresh-food', 'by weight', 0, '🐌', 'unavailable'),
   ('fresh-eggs', 'Chicken eggs', 'Fresh eggs for breakfast and baking.', 'Eggs & Dairy', 'fresh-food', '1 crate', 5500, '🥚', 'in_stock'),
   ('foodstuff-baby-rice-cereal', 'Baby rice cereal', 'Packaged baby cereal; follow the age and preparation guidance on the label.', 'Baby Food', 'foodstuff', '300 g', 3500, '🥣', 'in_stock'),
   ('foodstuff-baby-multigrain-cereal', 'Baby multigrain cereal', 'Packaged multigrain baby cereal; follow the age and preparation guidance on the label.', 'Baby Food', 'foodstuff', '300 g', 3800, '🥣', 'in_stock'),

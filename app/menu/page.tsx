@@ -29,6 +29,7 @@ const dishes: MenuDish[] = [
   ["Rice & Chicken Stew", 0, "Steamed white rice served with chicken stew.", "/rice_stew.jpg", "rice", false],
   ["Rice & Goat Meat Stew", 0, "Steamed white rice served with goat meat stew.", "/rice_stew.jpg", "rice", false],
   ["Rice & Beef Stew", 0, "Steamed white rice served with beef stew.", "/rice_stew.jpg", "rice", false],
+  ["Cooked Snails", 0, "Cooked snails prepared with traditional seasoning.", "/cooked-food.png", "seafood", false],
 ];
 
 const dishIds: Record<string, number> = {
@@ -56,6 +57,7 @@ const dishIds: Record<string, number> = {
   "Rice & Chicken Stew": 22,
   "Rice & Goat Meat Stew": 23,
   "Rice & Beef Stew": 24,
+  "Cooked Snails": 25,
 };
 
 const defaultCategoryNames: Record<string, string> = {
@@ -65,6 +67,7 @@ const defaultCategoryNames: Record<string, string> = {
   "pepper-soup": "Pepper Soup",
   pasta: "Pasta",
   dessert: "Dessert",
+  seafood: "Seafood",
 };
 
 const categoryLabel = (category: string) => defaultCategoryNames[category] ?? category
