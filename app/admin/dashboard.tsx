@@ -1619,7 +1619,16 @@ const saveOrderOperation = async (
                 <button type="button" onClick={() => saveVendor(newVendor)} disabled={savingVendorId === "new"} className="mt-3 rounded-full bg-green-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === "new" ? "Saving application..." : "Save vendor application"}</button>
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {vendors.map((vendor) => <div key={vendor.id} className="rounded-xl border border-green-100 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Vendor #{vendor.id}</p><p className="font-semibold text-green-900">{vendor.name || "New vendor"}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${(vendor.onboardingData?.verificationStatus ?? "pending") === "verified" ? "bg-green-100 text-green-800" : vendor.onboardingData?.verificationStatus === "rejected" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>{vendor.onboardingData?.verificationStatus ?? "pending"}</span></div><VendorFields vendor={vendor} products={products} meals={meals} onChange={(next) => setVendors((current) => current.map((item) => item.id === vendor.id ? { ...next, id: vendor.id } : item))} /><button type="button" onClick={() => saveVendor(vendor)} disabled={savingVendorId === vendor.id} className="mt-3 rounded-full bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === vendor.id ? "Saving..." : "Save vendor record"}</button></div>)}
+                {vendors.map((vendor) => <details key={vendor.id} className="group rounded-xl border border-green-100 bg-white">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 marker:content-none">
+                    <div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Vendor #{vendor.id}</p><p className="font-semibold text-green-900">{vendor.name || "New vendor"}</p></div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${(vendor.onboardingData?.verificationStatus ?? "pending") === "verified" ? "bg-green-100 text-green-800" : vendor.onboardingData?.verificationStatus === "rejected" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>{vendor.onboardingData?.verificationStatus ?? "pending"}</span>
+                  </summary>
+                  <div className="border-t border-green-100 p-4">
+                    <VendorFields vendor={vendor} products={products} meals={meals} onChange={(next) => setVendors((current) => current.map((item) => item.id === vendor.id ? { ...next, id: vendor.id } : item))} />
+                    <button type="button" onClick={() => saveVendor(vendor)} disabled={savingVendorId === vendor.id} className="mt-3 rounded-full bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{savingVendorId === vendor.id ? "Saving..." : "Save vendor record"}</button>
+                  </div>
+                </details>)}
               </div>
             </div>
           )}
