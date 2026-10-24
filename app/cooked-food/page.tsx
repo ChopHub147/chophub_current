@@ -326,7 +326,7 @@ export default function CookedFoodPage() {
     { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
-    { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "soup", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
@@ -386,7 +386,7 @@ export default function CookedFoodPage() {
             image: meal.image,
             available: meal.available,
             vendors: meal.vendors ?? [],
-            type: (meal.category === "soup-swallow"
+            type: (meal.category === "soup-swallow" || meal.name === "Cooked Snails"
               ? "soup"
               : meal.category === "rice"
                 ? meal.name === "Plain/White Rice" ? "plain" : "rice"

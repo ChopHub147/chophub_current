@@ -65,7 +65,6 @@ export default function SiteNav() {
             <img src="/Chop_icon.png" alt="ChopHub" className="h-11 w-11 rounded-full object-cover" />
             <div className="leading-none">
               <span className="block text-[1.45rem] font-black tracking-tight text-[#073b23]">ChopHub</span>
-              <span className="mt-1 block text-[0.55rem] font-bold tracking-[0.38em] text-[#073b23]">CALABAR</span>
             </div>
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-semibold text-[#244438] sm:flex">

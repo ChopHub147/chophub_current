@@ -46,7 +46,7 @@ export default function Home() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a8e7b7]">We’re here to help</p>
               <h2 className="mt-2 text-3xl font-black tracking-tight">Contact us</h2>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">Questions about an order? Get in touch with the ChopHub team. Serving Calabar Municipal and Calabar South, 24/7.</p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">Questions about an order? Get in touch with the ChopHub team. We’re here 24/7.</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <a href="https://wa.me/2348081688937" target="_blank" rel="noreferrer" className="rounded-full bg-white px-5 py-3 text-sm font-bold text-[#073b23] transition hover:bg-[#e8f9e9]">WhatsApp us</a>
