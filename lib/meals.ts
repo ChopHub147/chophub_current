@@ -1,4 +1,5 @@
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
+import { currentServiceDay } from "@/lib/service-days";
 
 export type CatalogMeal = {
   id: number;
@@ -12,7 +13,7 @@ export type CatalogMeal = {
 };
 
 type MealRow = Omit<CatalogMeal, "vendors">;
-type MealAssignment = { vendor_id: number; meal_id: number; price: number | null };
+type MealAssignment = { vendor_id: number; meal_id: number; price: number | null; available_days: string[] | null };
 type MealVendor = { id: number; name: string; active: boolean; latitude: number | null; longitude: number | null };
 
 function hasCoordinates(vendor: MealVendor) {
@@ -22,9 +23,10 @@ function hasCoordinates(vendor: MealVendor) {
 }
 
 export async function getMealCatalog(): Promise<CatalogMeal[]> {
+  const today = currentServiceDay();
   const [meals, assignments, vendors] = await Promise.all([
     supabaseAdminRequest<MealRow[]>("meals?select=id,name,description,price,image,category,available&order=id.asc"),
-    supabaseAdminRequest<MealAssignment[]>("vendor_meals?select=vendor_id,meal_id,price"),
+    supabaseAdminRequest<MealAssignment[]>("vendor_meals?select=vendor_id,meal_id,price,available_days"),
     supabaseAdminRequest<MealVendor[]>("vendors?select=id,name,active,latitude,longitude&active=eq.true"),
   ]);
   const eligibleVendors = new Map(vendors.filter(hasCoordinates).map((vendor) => [vendor.id, vendor]));
@@ -32,6 +34,7 @@ export async function getMealCatalog(): Promise<CatalogMeal[]> {
   return meals.map((meal) => {
     const mealVendors = assignments
       .filter((assignment) => assignment.meal_id === meal.id && eligibleVendors.has(assignment.vendor_id))
+      .filter((assignment) => (assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]).includes(today))
       .flatMap((assignment) => {
         const vendor = eligibleVendors.get(assignment.vendor_id)!;
         const price = assignment.price === null ? Number(meal.price) : Number(assignment.price);

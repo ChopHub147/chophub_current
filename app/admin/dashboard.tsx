@@ -141,7 +141,7 @@ function normalizeVendorOnboarding(value: unknown): VendorOnboarding {
   };
 }
 
-type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; onboardingData?: VendorOnboarding };
+type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; mealDays: Record<number, string[]>; onboardingData?: VendorOnboarding };
 type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; account_status: "pending" | "approved" | "suspended"; last_location_at?: string | null };
 
 export default function AdminDashboard({
@@ -189,7 +189,7 @@ export default function AdminDashboard({
   const [vendorError, setVendorError] = useState("");
   const [vendorSavedMessage, setVendorSavedMessage] = useState("");
   const [savingVendorId, setSavingVendorId] = useState<number | "new" | null>(null);
-  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, onboardingData: createEmptyVendorOnboarding() });
+  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, onboardingData: createEmptyVendorOnboarding() });
   const [riders, setRiders] = useState<Rider[]>([]);
   const [riderError, setRiderError] = useState("");
   const [savingRiderId, setSavingRiderId] = useState<number | "new" | null>(null);
@@ -642,7 +642,7 @@ export default function AdminDashboard({
         const saved = result as Vendor;
         if (isNew) {
           setVendors((current) => [...current, saved]);
-          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, onboardingData: createEmptyVendorOnboarding() });
+          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, onboardingData: createEmptyVendorOnboarding() });
         } else {
           setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds, onboardingData: saved.onboardingData || item.onboardingData } : item));
         }
@@ -1859,6 +1859,8 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
   const assignedMealIds = Array.isArray(vendor.mealIds) ? vendor.mealIds : [];
   const assignedProductIds = Array.isArray(vendor.productIds) ? vendor.productIds : [];
   const assignedMealPrices = vendor.mealPrices && typeof vendor.mealPrices === "object" ? vendor.mealPrices : {};
+  const assignedMealDays = vendor.mealDays && typeof vendor.mealDays === "object" ? vendor.mealDays : {};
+  const defaultMealDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const toggleMeal = (mealId: number) => {
     const mealIds = assignedMealIds.includes(mealId) ? assignedMealIds.filter((id) => id !== mealId) : [...assignedMealIds, mealId];
     onChange({ ...vendor, mealIds });
@@ -1888,10 +1890,15 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
                 <span>{meal.category} · {meal.name}</span>
               </label>
               {assignedMealIds.includes(meal.id) && (
-                <label className="text-xs text-gray-600">
-                  Vendor price (₦)
-                  <input type="number" min={meal.price > 0 ? 0 : 0.01} step="0.01" aria-label={`${meal.name} vendor price`} placeholder={meal.price > 0 ? `Base ₦${meal.price.toLocaleString()}` : "Required vendor price"} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
-                </label>
+                <div className="space-y-2 text-xs text-gray-600">
+                  <label className="block">Vendor price (₦)
+                    <input type="number" min={meal.price > 0 ? 0 : 0.01} step="0.01" aria-label={`${meal.name} vendor price`} placeholder={meal.price > 0 ? `Base ₦${meal.price.toLocaleString()}` : "Required vendor price"} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+                  </label>
+                  <fieldset><legend className="font-semibold">Available days</legend><div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">{onboardingDays.map((day) => {
+                    const days = Array.isArray(assignedMealDays[meal.id]) ? assignedMealDays[meal.id] : defaultMealDays;
+                    return <label key={day} className="flex items-center gap-1"><input type="checkbox" checked={days.includes(day)} onChange={(event) => onChange({ ...vendor, mealDays: { ...assignedMealDays, [meal.id]: event.target.checked ? [...days, day] : days.filter((entry) => entry !== day) } })} />{day.slice(0, 3)}</label>;
+                  })}</div></fieldset>
+                </div>
               )}
             </div>
           )) : <p className="text-sm text-gray-500">No cooked meals are available to assign.</p>}

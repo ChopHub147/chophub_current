@@ -2,6 +2,7 @@ import { calculateDeliveryQuote, deliveryPricing } from "@/lib/delivery-pricing"
 import { getGrocerySizeOptions } from "@/lib/grocery-size-options";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { currentServiceDay } from "@/lib/service-days";
 
 export class CheckoutError extends Error {
   status: number;
@@ -84,7 +85,7 @@ function parseMealUnitPrice(meal: { id: number; name: string; price: number; cat
       price += swallowPrices[extra]; hasRequiredPairing = true; continue;
     }
     if (extra === "Plantain" || extra === "Rice") {
-      if (!category.includes("meat") || hasRequiredPairing) throw new CheckoutError(`Invalid meal option for ${baseName}.`);
+      if ((!category.includes("meat") && !(category.includes("pepper-soup") && extra === "Rice")) || hasRequiredPairing) throw new CheckoutError(`Invalid meal option for ${baseName}.`);
       price += 1000; hasRequiredPairing = true; continue;
     }
     if (extra === "Water") {
@@ -102,6 +103,7 @@ function parseMealUnitPrice(meal: { id: number; name: string; price: number; cat
   }
   if (category.includes("soup-swallow") && !hasRequiredPairing) throw new CheckoutError(`Choose a swallow for ${baseName} again.`);
   if (category.includes("meat") && !hasRequiredPairing) throw new CheckoutError(`Choose Plantain or Rice with ${baseName} again.`);
+  if (category.includes("pepper-soup") && !hasRequiredPairing) throw new CheckoutError(`Choose Rice with ${baseName} again.`);
   return price;
 }
 
@@ -130,12 +132,12 @@ export async function priceCheckoutItems(input: unknown, selectedVendorByItem: R
   const [meals, products, mealVendorPrices, activeVendors] = await Promise.all([
     mealIds.length ? supabaseAdminRequest<Array<{ id: number; name: string; price: number; category: string; available: boolean }>>(`meals?id=in.(${mealIds.join(",")})&select=id,name,price,category,available`) : Promise.resolve([]),
     loadProducts(),
-    mealIds.length && selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&vendor_id=in.(${selectedMealVendorIds.join(",")})&select=vendor_id,meal_id,price`) : Promise.resolve([]),
+    mealIds.length && selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null; available_days: string[] | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&vendor_id=in.(${selectedMealVendorIds.join(",")})&select=vendor_id,meal_id,price,available_days`) : Promise.resolve([]),
     selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ id: number; active: boolean }>>(`vendors?id=in.(${selectedMealVendorIds.join(",")})&active=eq.true&select=id,active`) : Promise.resolve([]),
   ]);
   const mealById = new Map(meals.map((meal) => [String(meal.id), meal]));
   const productById = new Map(products.map((product) => [product.id, product]));
-  const vendorPriceByMeal = new Map(mealVendorPrices.map((assignment) => [`${assignment.vendor_id}:${assignment.meal_id}`, assignment.price]));
+  const vendorPriceByMeal = new Map(mealVendorPrices.filter((assignment) => (assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]).includes(currentServiceDay())).map((assignment) => [`${assignment.vendor_id}:${assignment.meal_id}`, assignment.price]));
   const activeVendorIds = new Set(activeVendors.map((vendor) => vendor.id));
   const pricedItems = items.map((item) => {
     const mealId = /^([0-9]+)(?:-|$)/.exec(item.id)?.[1];
@@ -234,13 +236,14 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const mealIds = [...new Set(uniqueItems.map((item) => /^([0-9]+)(?:-|$)/.exec(item.id)?.[1]).filter((id): id is string => Boolean(id)))];
   const productIds = uniqueItems.filter((item) => !/^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.id);
   const [mealAssignments, productAssignments, mealRows] = await Promise.all([
-    mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&select=vendor_id,meal_id,price`) : Promise.resolve([]),
+    mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null; available_days: string[] | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&select=vendor_id,meal_id,price,available_days`) : Promise.resolve([]),
     productIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; product_id: string }>>(`vendor_products?product_id=in.(${productIds.join(",")})&select=vendor_id,product_id`) : Promise.resolve([]),
     mealIds.length ? supabaseAdminRequest<Array<{ id: number; price: number }>>(`meals?id=in.(${mealIds.join(",")})&select=id,price`) : Promise.resolve([]),
   ]);
   const baseMealPriceById = new Map(mealRows.map((meal) => [meal.id, Number(meal.price)]));
   const assignmentsByItem = new Map<string, Set<number>>();
   for (const assignment of mealAssignments) {
+    if (!(assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]).includes(currentServiceDay())) continue;
     const effectivePrice = assignment.price === null ? baseMealPriceById.get(assignment.meal_id) : Number(assignment.price);
     if (!Number.isFinite(effectivePrice) || Number(effectivePrice) <= 0) continue;
     const key = `meal:${assignment.meal_id}`; assignmentsByItem.set(key, assignmentsByItem.get(key) ?? new Set()); assignmentsByItem.get(key)?.add(assignment.vendor_id);

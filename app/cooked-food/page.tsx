@@ -62,7 +62,7 @@ type Dish = {
   price: number;
   desc: string;
   image: string;
-  type: "soup" | "meat" | "fish" | "rice" | "plain" | "special";
+  type: "soup" | "pepper-soup" | "meat" | "fish" | "rice" | "plain" | "special";
   available?: boolean;
   sectionTitle?: string;
   vendors?: MealVendorOption[];
@@ -319,9 +319,9 @@ export default function CookedFoodPage() {
       type: "plain",
       available: false,
     },
-    { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/cooked-food.png", type: "special", available: false },
-    { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/cooked-food.png", type: "special", available: false },
-    { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
+    { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
+    { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
     { id: 21, name: "Pasta with Chicken", price: 0, desc: "Pasta with chicken.", image: "/cooked-food.png", type: "special", available: false },
     { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
@@ -388,6 +388,8 @@ export default function CookedFoodPage() {
             vendors: meal.vendors ?? [],
             type: (meal.category === "soup-swallow" || meal.name === "Cooked Snails"
               ? "soup"
+              : meal.category === "pepper-soup"
+                ? "pepper-soup"
               : meal.category === "rice"
                 ? meal.name === "Plain/White Rice" ? "plain" : "rice"
                 : meal.name === "Fresh Roasted Fish"
@@ -528,6 +530,10 @@ export default function CookedFoodPage() {
       alert("Please choose Plantain or Rice first.");
       return;
     }
+    if (dish.type === "pepper-soup" && !selectedPairing[dish.id]) {
+      alert("Please choose Rice as a side first.");
+      return;
+    }
 
     const swallow = selectedSwallow[dish.id];
     const pairing = selectedPairing[dish.id];
@@ -550,6 +556,8 @@ export default function CookedFoodPage() {
     const itemName =
       dish.type === "soup"
         ? `${dish.name} + ${swallow}${includesWater ? " + Water" : ""}${drinkLabel}`
+        : dish.type === "pepper-soup"
+          ? `${dish.name} + ${pairing}${includesWater ? " + Water" : ""}${drinkLabel}`
         : dish.type === "meat"
           ? `${dish.name} + ${pairing}${includesWater ? " + Water" : ""}${drinkLabel}`
           : dish.type === "rice" && proteinAddons.length > 0
@@ -573,6 +581,8 @@ export default function CookedFoodPage() {
       dish.type === "soup"
         ? baseMealPrice + (swallowOptions.find((option) => option.name === swallow)?.price ?? 0)
           + (includesWater ? waterPrice : 0) + drinkCost
+        : dish.type === "pepper-soup"
+          ? baseMealPrice + 1000 + (includesWater ? waterPrice : 0) + drinkCost
         : dish.type === "meat"
           ? baseMealPrice + 1000 + (includesWater ? waterPrice : 0) + drinkCost
           : dish.type === "rice"
@@ -590,6 +600,8 @@ export default function CookedFoodPage() {
     const baseCartId =
       dish.type === "soup"
         ? `${dish.id}-${swallow}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
+        : dish.type === "pepper-soup"
+          ? `${dish.id}-${pairing}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
         : dish.type === "meat"
           ? `${dish.id}-${pairing}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
           : dish.type === "rice"
@@ -1123,6 +1135,23 @@ export default function CookedFoodPage() {
                         {swallow.name} — ₦{swallow.price.toLocaleString()}
                       </option>
                     ))}
+                  </select>
+                </label>
+              )}
+              {customizingDish.type === "pepper-soup" && (
+                <label className="mb-5 block">
+                  <span className="mb-2 block text-sm font-semibold text-green-900">Side dish</span>
+                  <select
+                    required
+                    value={selectedPairing[customizingDish.id] || ""}
+                    onChange={(event) => setSelectedPairing((current) => ({
+                      ...current,
+                      [customizingDish.id]: event.target.value,
+                    }))}
+                    className="w-full rounded-lg border border-green-200 bg-white px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Select side</option>
+                    <option value="Rice">Rice — ₦1,000</option>
                   </select>
                 </label>
               )}
