@@ -43,14 +43,13 @@ type CheckoutQuoteView = {
   fees: { deliveryFee: number; extraPickupFee: number; eveningDriverFee: number; totalDeliveryCharges: number };
 };
 
-type MealSide = "Salad" | "Parboiled Beans" | "Fried Plantain";
-type MealVendorOption = { id: number; name: string; price: number; sidePrices?: Partial<Record<MealSide, number>> };
+type MealVendorOption = { id: number; name: string; price: number };
 
 type DatabaseMeal = {
   id: number;
   name: string;
   description: string;
-  price: number | null;
+  price: number;
   image: string;
   category: string;
   available?: boolean;
@@ -60,7 +59,7 @@ type DatabaseMeal = {
 type Dish = {
   id: number;
   name: string;
-  price: number | null;
+  price: number;
   desc: string;
   image: string;
   type: "soup" | "pepper-soup" | "meat" | "fish" | "rice" | "plain" | "special";
@@ -157,8 +156,9 @@ export default function CookedFoodPage() {
     { name: "Chicken", price: 3500 },
     { name: "Goat Meat", price: 2500 },
     { name: "Beef", price: 2500 },
-    { name: "Fried Fish", price: 2000 },
-    { name: "Boiled Egg", price: 400 },
+    { name: "Fish", price: 2000 },
+    { name: "Fried Plantain", price: 500 },
+    { name: "Salad", price: 700 },
   ];
   const waterPrice = 500;
   const drinkOptions = [
@@ -310,16 +310,23 @@ export default function CookedFoodPage() {
       type: "special" as const,
       sectionTitle: "Abáchà",
     },
+    {
+      id: 17,
+      name: "Plain/White Rice",
+      price: 0,
+      desc: "Plain white rice.",
+      image: "/Long-grain_rice.webp",
+      type: "plain",
+      available: false,
+    },
     { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
     { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
     { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
     { id: 21, name: "Pasta with Chicken", price: 0, desc: "Pasta with chicken.", image: "/cooked-food.png", type: "special", available: false },
+    { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "soup", available: false },
-    { id: 26, name: "Coconut Rice", price: null, desc: "Coconut rice.", image: "/coconut.jpg", type: "rice", available: false },
-    { id: 27, name: "Fried Rice", price: null, desc: "Fried rice.", image: "/cooked-food.png", type: "rice", available: false },
-    { id: 28, name: "Spaghetti", price: null, desc: "Spaghetti.", image: "/cooked-food.png", type: "special", available: false },
-    { id: 29, name: "Ekpang", price: null, desc: "Ekpang.", image: "/cooked-food.png", type: "special", available: false },
-    { id: 30, name: "Moi-Moi", price: null, desc: "Moi-Moi.", image: "/cooked-food.png", type: "special", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
@@ -333,12 +340,11 @@ export default function CookedFoodPage() {
   ]);
 
   const featuredDishes = dishes.filter((dish) =>
-    [1, 3, 12, 13, 15, 18, 19, 20, 21, 25, 26, 27, 28, 29, 30].includes(dish.id)
+    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25].includes(dish.id)
   );
 
   const [selectedSwallow, setSelectedSwallow] = useState<Record<number, string>>({});
   const [selectedPairing, setSelectedPairing] = useState<Record<number, string>>({});
-  const [selectedRiceSide, setSelectedRiceSide] = useState<Record<number, MealSide | "">>({});
   const [selectedProtein, setSelectedProtein] = useState<
     Record<number, Record<string, number>>
   >({});
@@ -385,7 +391,7 @@ export default function CookedFoodPage() {
               : meal.category === "pepper-soup"
                 ? "pepper-soup"
               : meal.category === "rice"
-                ? "rice"
+                ? meal.name === "Plain/White Rice" ? "plain" : "rice"
                 : meal.name === "Fresh Roasted Fish"
                   ? "fish"
                   : meal.category === "meat"
@@ -531,9 +537,7 @@ export default function CookedFoodPage() {
 
     const swallow = selectedSwallow[dish.id];
     const pairing = selectedPairing[dish.id];
-    const riceSide = selectedRiceSide[dish.id] || "";
     const selectedProteins = selectedProtein[dish.id] || {};
-    const supportsProteinAddon = dish.type === "rice" || dish.name === "Spaghetti";
     const includesWater = selectedWater[dish.id] || false;
     const drink = selectedDrink[dish.id];
     const drinkOption = [...drinkOptions, ...beerOptions].find(
@@ -556,26 +560,19 @@ export default function CookedFoodPage() {
           ? `${dish.name} + ${pairing}${includesWater ? " + Water" : ""}${drinkLabel}`
         : dish.type === "meat"
           ? `${dish.name} + ${pairing}${includesWater ? " + Water" : ""}${drinkLabel}`
-          : supportsProteinAddon && proteinAddons.length > 0
+          : dish.type === "rice" && proteinAddons.length > 0
           ? `${dish.name} + ${proteinAddons
               .map(
                 (option) =>
                   `${option.name} x${selectedProteins[option.name]}`
               )
-              .join(" + ")}${riceSide ? ` + ${riceSide}` : ""}${includesWater ? " + Water" : ""}${drinkLabel}`
-          : dish.type === "rice" && riceSide
-          ? `${dish.name} + ${riceSide}${includesWater ? " + Water" : ""}${drinkLabel}`
+              .join(" + ")}${includesWater ? " + Water" : ""}${drinkLabel}`
           : `${dish.name}${includesWater ? " + Water" : ""}${drinkLabel}`;
 
     const selectedVendorId = selectedVendorByDish[dish.id] ?? null;
     const selectedVendor = dish.vendors?.find((vendor) => vendor.id === selectedVendorId);
-    const riceSidePrice = riceSide && selectedVendor ? selectedVendor.sidePrices?.[riceSide] : undefined;
-    if (dish.type === "rice" && riceSide && (!selectedVendor || typeof riceSidePrice !== "number" || !Number.isFinite(riceSidePrice) || riceSidePrice <= 0)) {
-      alert("Choose a vendor with a valid price for that side.");
-      return;
-    }
     const vendorPrices = dish.vendors?.map((vendor) => vendor.price).filter((price) => Number.isFinite(price) && price > 0) ?? [];
-    const baseMealPrice = selectedVendor?.price ?? (vendorPrices.length ? Math.min(...vendorPrices) : (dish.price ?? 0));
+    const baseMealPrice = selectedVendor?.price ?? (vendorPrices.length ? Math.min(...vendorPrices) : dish.price);
     if (!Number.isFinite(baseMealPrice) || baseMealPrice <= 0) {
       alert("This meal is unavailable until a vendor assigns a valid price.");
       return;
@@ -588,9 +585,8 @@ export default function CookedFoodPage() {
           ? baseMealPrice + 1000 + (includesWater ? waterPrice : 0) + drinkCost
         : dish.type === "meat"
           ? baseMealPrice + 1000 + (includesWater ? waterPrice : 0) + drinkCost
-          : supportsProteinAddon
+          : dish.type === "rice"
             ? baseMealPrice +
-              (riceSide ? Number(riceSidePrice) : 0) +
               proteinAddons.reduce(
                 (sum, option) =>
                   sum + option.price * selectedProteins[option.name],
@@ -608,10 +604,10 @@ export default function CookedFoodPage() {
           ? `${dish.id}-${pairing}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
         : dish.type === "meat"
           ? `${dish.id}-${pairing}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
-          : supportsProteinAddon
+          : dish.type === "rice"
             ? `${dish.id}-${proteinAddons
                 .map((option) => `${option.name}-${selectedProteins[option.name]}`)
-                .join("_") || "plain"}${riceSide ? `-side-${riceSide}` : ""}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
+                .join("_") || "plain"}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`
           : `${dish.id}${includesWater ? "-water" : ""}${drinkOption ? `-${drinkOption.name}-${drink?.quantity}` : ""}`;
         const cartId = `${baseCartId}-vendor-${selectedVendorId ?? "nearest"}`;
 
@@ -974,7 +970,7 @@ export default function CookedFoodPage() {
                       <span className="text-green-700 font-bold text-xs md:text-base">
                         {(() => {
                           const validVendorPrices = dish.vendors?.map((vendor) => vendor.price).filter((price) => Number.isFinite(price) && price > 0) ?? [];
-                          const displayPrice = validVendorPrices.length ? Math.min(...validVendorPrices) : (dish.price ?? 0);
+                          const displayPrice = validVendorPrices.length ? Math.min(...validVendorPrices) : dish.price;
                           return displayPrice > 0
                             ? `${dish.type === "rice" || validVendorPrices.length > 0 ? "From " : ""}₦${displayPrice.toLocaleString()}`
                             : "Price set by vendor";
@@ -1074,7 +1070,7 @@ export default function CookedFoodPage() {
                   {(() => {
                     const selectedVendor = customizingDish.vendors?.find((vendor) => vendor.id === (selectedVendorByDish[customizingDish.id] ?? null));
                     const availablePrices = customizingDish.vendors?.map((vendor) => vendor.price).filter((price) => price > 0) ?? [];
-                    const price = selectedVendor?.price ?? (availablePrices.length ? Math.min(...availablePrices) : (customizingDish.price ?? 0));
+                    const price = selectedVendor?.price ?? (availablePrices.length ? Math.min(...availablePrices) : customizingDish.price);
                     return price > 0
                       ? `${selectedVendor ? "Price" : "From"}: ₦${price.toLocaleString()}`
                       : "Price set by vendor before ordering";
@@ -1160,36 +1156,60 @@ export default function CookedFoodPage() {
                 </label>
               )}
 
-              {(customizingDish.type === "rice" || customizingDish.name === "Spaghetti") && (
+              {customizingDish.type === "rice" && (
                 <fieldset className="mb-5">
                   <legend className="mb-2 text-sm font-semibold text-green-900">
-                    Choose a protein <span className="font-normal text-gray-500">(optional)</span>
+                    Proteins &amp; sides <span className="font-normal text-gray-500">(optional)</span>
                   </legend>
                   <div className="space-y-2">
-                    {proteinOptions.filter((protein) => customizingDish.type === "rice" || protein.name === "Boiled Egg").map((protein) => {
-                      const selected =
-                        (selectedProtein[customizingDish.id]?.[protein.name] || 0) > 0;
+                    {proteinOptions.map((protein) => {
+                      const quantity =
+                        selectedProtein[customizingDish.id]?.[protein.name] || 0;
 
                       return (
-                        <label
+                        <div
                           key={protein.name}
-                          className="flex cursor-pointer items-center rounded-lg border border-green-100 px-3 py-2.5"
+                          className="flex items-center justify-between rounded-lg border border-green-100 px-3 py-2.5"
                         >
-                          <span className="flex items-center gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name={`protein-${customizingDish.id}`}
-                              checked={selected}
-                              onChange={() =>
-                                setSelectedProtein((prev) => ({
-                                  ...prev,
-                                  [customizingDish.id]: { [protein.name]: 1 },
-                                }))
-                              }
-                            />
+                          <span className="text-sm">
                             {protein.name} — ₦{protein.price.toLocaleString()}
                           </span>
-                        </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedProtein((prev) => ({
+                                  ...prev,
+                                  [customizingDish.id]: {
+                                    ...prev[customizingDish.id],
+                                    [protein.name]: Math.max(0, quantity - 1),
+                                  },
+                                }))
+                              }
+                              className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200"
+                              aria-label={`Remove one portion of ${protein.name}`}
+                            >
+                              −
+                            </button>
+                            <span className="w-5 text-center font-medium">{quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedProtein((prev) => ({
+                                  ...prev,
+                                  [customizingDish.id]: {
+                                    ...prev[customizingDish.id],
+                                    [protein.name]: quantity + 1,
+                                  },
+                                }))
+                              }
+                              className="h-8 w-8 rounded-full bg-green-100 text-green-900 hover:bg-green-200"
+                              aria-label={`Add one portion of ${protein.name}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -1219,25 +1239,6 @@ export default function CookedFoodPage() {
                       </option>
                     ))}
                   </select>
-                </label>
-              )}
-
-              {customizingDish.type === "rice" && (
-                <label className="mb-5 block">
-                  <span className="mb-2 block text-sm font-semibold text-green-900">Optional side</span>
-                  <select
-                    value={selectedRiceSide[customizingDish.id] || ""}
-                    onChange={(event) => setSelectedRiceSide((current) => ({ ...current, [customizingDish.id]: event.target.value as MealSide | "" }))}
-                    className="w-full rounded-lg border border-green-200 bg-white px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">No side</option>
-                    {(["Salad", "Parboiled Beans", "Fried Plantain"] as MealSide[]).map((side) => {
-                      const vendor = customizingDish.vendors?.find((item) => item.id === (selectedVendorByDish[customizingDish.id] ?? null));
-                      const price = vendor?.sidePrices?.[side];
-                      return <option key={side} value={side} disabled={!vendor || !price || price <= 0}>{side}{price && price > 0 ? ` — ₦${price.toLocaleString()}` : " — vendor price required"}</option>;
-                    })}
-                  </select>
-                  <span className="mt-1 block text-xs text-gray-500">Choose a vendor above to see side prices. Side pricing is set by each vendor.</span>
                 </label>
               )}
 

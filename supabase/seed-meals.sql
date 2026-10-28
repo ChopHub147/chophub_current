@@ -27,12 +27,7 @@ values
   (22, 'Rice & Chicken Stew', 'Steamed white rice served with chicken stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub'),
   (23, 'Rice & Goat Meat Stew', 'Steamed white rice served with goat meat stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub'),
   (24, 'Rice & Beef Stew', 'Steamed white rice served with beef stew.', 0, '/rice_stew.jpg', 'rice', false, 'ChopHub'),
-  (25, 'Cooked Snails', 'Cooked snails prepared with traditional seasoning.', 0, '/cooked-food.png', 'seafood', false, 'ChopHub'),
-  (26, 'Coconut Rice', 'Coconut rice.', 0, '/coconut.jpg', 'rice', false, 'ChopHub'),
-  (27, 'Fried Rice', 'Fried rice.', 0, '/cooked-food.png', 'rice', false, 'ChopHub'),
-  (28, 'Spaghetti', 'Spaghetti.', 0, '/cooked-food.png', 'pasta', false, 'ChopHub'),
-  (29, 'Ekpang', 'Ekpang.', 0, '/cooked-food.png', 'special', false, 'ChopHub'),
-  (30, 'Moi-Moi', 'Moi-Moi.', 0, '/cooked-food.png', 'special', false, 'ChopHub')
+  (25, 'Cooked Snails', 'Cooked snails prepared with traditional seasoning.', 0, '/cooked-food.png', 'seafood', false, 'ChopHub')
 on conflict (id) do update set
   name = excluded.name,
   description = excluded.description,
@@ -40,7 +35,7 @@ on conflict (id) do update set
   image = excluded.image,
   category = excluded.category,
   available = case
-    when excluded.id between 17 and 30 then false
+    when excluded.id between 17 and 25 then false
     else public.meals.available
   end,
   vendor_name = excluded.vendor_name;

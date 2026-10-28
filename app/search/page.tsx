@@ -42,6 +42,7 @@ const fallbackMeals: Meal[] = [
   { id: 12, name: "Jollof Rice", description: "Fragrant party-style jollof rice served plain or with protein.", price: 2000, image: "/jollof.jpg", category: "rice", available: true },
   { id: 13, name: "Rice & Stew", description: "Steamed rice with rich, flavorful stew and protein.", price: 2000, image: "/rice_stew.jpg", category: "rice", available: true },
   { id: 15, name: "Parfait", description: "A creamy, layered parfait treat.", price: 5000, image: "/Parfait.webp", category: "dessert", available: true },
+  { id: 17, name: "Plain/White Rice", description: "Plain white rice.", price: 0, image: "/Long-grain_rice.webp", category: "rice", available: false },
   { id: 18, name: "Goat Meat Pepper Soup", description: "Goat meat pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
   { id: 19, name: "Chicken Pepper Soup", description: "Chicken pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
   { id: 20, name: "Catfish Pepper Soup", description: "Catfish pepper soup.", price: 0, image: "/cooked-food.png", category: "pepper-soup", available: false },
@@ -49,11 +50,6 @@ const fallbackMeals: Meal[] = [
   { id: 22, name: "Rice & Chicken Stew", description: "Steamed white rice served with chicken stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
   { id: 23, name: "Rice & Goat Meat Stew", description: "Steamed white rice served with goat meat stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
   { id: 24, name: "Rice & Beef Stew", description: "Steamed white rice served with beef stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
-  { id: 26, name: "Coconut Rice", description: "Coconut rice.", price: 0, image: "/coconut.jpg", category: "rice", available: false },
-  { id: 27, name: "Fried Rice", description: "Fried rice.", price: 0, image: "/cooked-food.png", category: "rice", available: false },
-  { id: 28, name: "Spaghetti", description: "Spaghetti.", price: 0, image: "/cooked-food.png", category: "pasta", available: false },
-  { id: 29, name: "Ekpang", description: "Ekpang.", price: 0, image: "/cooked-food.png", category: "special", available: false },
-  { id: 30, name: "Moi-Moi", description: "Moi-Moi.", price: 0, image: "/cooked-food.png", category: "special", available: false },
 ];
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
