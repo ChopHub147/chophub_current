@@ -50,7 +50,7 @@ export function verifyCheckoutQuote(token: unknown, address: unknown, area: unkn
 }
 
 const swallowPrices: Record<string, number> = { Garri: 800, Semo: 800, Poundo: 800, Wheat: 800, "Plantain Flour": 800, Fufu: 500 };
-const proteinPrices: Record<string, number> = { Chicken: 3500, "Goat Meat": 2500, Beef: 2500, Fish: 2000, "Fried Plantain": 500, Salad: 700 };
+const proteinPrices: Record<string, number> = { Chicken: 3500, "Goat Meat": 2500, Beef: 2500, "Fried Fish": 2000, "Boiled Egg": 400 };
 const drinkPrices: Record<string, number> = { Coke: 500, Water: 500, Malt: 1000, Hollandia: 3000, Sprite: 500, "Tiger Nuts": 1500, "Pineapple Juice": 2000, Heniken: 1500, Star: 1500, Stout: 1500, Desperado: 1500 };
 
 export function lagosMinutesNow() {
@@ -92,13 +92,14 @@ function parseMealUnitPrice(meal: { id: number; name: string; price: number; cat
       if (hasWater) throw new CheckoutError(`Invalid meal option for ${baseName}.`);
       price += 500; hasWater = true; continue;
     }
-    const protein = /^(Chicken|Goat Meat|Beef|Fish|Fried Plantain|Salad) x([1-9]\d?)$/.exec(extra);
+    const protein = /^(Chicken|Goat Meat|Beef|Fried Fish|Boiled Egg) x([1-9]\d?)$/.exec(extra);
     if (protein) {
-      if (!category.includes("rice")) throw new CheckoutError(`Invalid meal option for ${baseName}.`);
+      if (!category.includes("rice") && !(baseName === "Spaghetti" && protein[1] === "Boiled Egg")) throw new CheckoutError(`Invalid meal option for ${baseName}.`);
       price += proteinPrices[protein[1]] * Number(protein[2]); continue;
     }
     const drink = /^(.+?) x([1-9]\d?)$/.exec(extra);
     if (drink && Object.hasOwn(drinkPrices, drink[1])) { price += drinkPrices[drink[1]] * Number(drink[2]); continue; }
+    if (/^(Salad|Parboiled Beans|Fried Plantain)$/.test(extra) && category.includes("rice")) continue;
     throw new CheckoutError(`Invalid meal option for ${baseName}.`);
   }
   if (category.includes("soup-swallow") && !hasRequiredPairing) throw new CheckoutError(`Choose a swallow for ${baseName} again.`);
@@ -129,15 +130,17 @@ export async function priceCheckoutItems(input: unknown, selectedVendorByItem: R
     }
   };
   const selectedMealVendorIds = [...new Set(items.filter((item) => item.vendorId && /^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.vendorId as number))];
-  const [meals, products, mealVendorPrices, activeVendors] = await Promise.all([
-    mealIds.length ? supabaseAdminRequest<Array<{ id: number; name: string; price: number; category: string; available: boolean }>>(`meals?id=in.(${mealIds.join(",")})&select=id,name,price,category,available`) : Promise.resolve([]),
+  const [meals, products, mealVendorPrices, mealSidePrices, activeVendors] = await Promise.all([
+    mealIds.length ? supabaseAdminRequest<Array<{ id: number; name: string; price: number | null; category: string; available: boolean }>>(`meals?id=in.(${mealIds.join(",")})&select=id,name,price,category,available`) : Promise.resolve([]),
     loadProducts(),
     mealIds.length && selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null; available_days: string[] | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&vendor_id=in.(${selectedMealVendorIds.join(",")})&select=vendor_id,meal_id,price,available_days`) : Promise.resolve([]),
+    selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; side: string; price: number | null }>>(`vendor_meal_sides?vendor_id=in.(${selectedMealVendorIds.join(",")})&select=vendor_id,side,price`) : Promise.resolve([]),
     selectedMealVendorIds.length ? supabaseAdminRequest<Array<{ id: number; active: boolean }>>(`vendors?id=in.(${selectedMealVendorIds.join(",")})&active=eq.true&select=id,active`) : Promise.resolve([]),
   ]);
   const mealById = new Map(meals.map((meal) => [String(meal.id), meal]));
   const productById = new Map(products.map((product) => [product.id, product]));
   const vendorPriceByMeal = new Map(mealVendorPrices.filter((assignment) => (assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]).includes(currentServiceDay())).map((assignment) => [`${assignment.vendor_id}:${assignment.meal_id}`, assignment.price]));
+  const vendorPriceBySide = new Map(mealSidePrices.map((assignment) => [`${assignment.vendor_id}:${assignment.side}`, assignment.price]));
   const activeVendorIds = new Set(activeVendors.map((vendor) => vendor.id));
   const pricedItems = items.map((item) => {
     const mealId = /^([0-9]+)(?:-|$)/.exec(item.id)?.[1];
@@ -148,12 +151,21 @@ export async function priceCheckoutItems(input: unknown, selectedVendorByItem: R
         return { ...item, price: Number(meal.price), name: item.name, isMeal: true };
       }
       if (!item.vendorId) throw new CheckoutError(`Choose a vendor for ${meal.name} before ordering.`, 409);
-      let vendorPrice = meal.price;
+      let vendorPrice = Number(meal.price);
       const assignmentPrice = vendorPriceByMeal.get(`${item.vendorId}:${meal.id}`);
       if (!activeVendorIds.has(item.vendorId) || assignmentPrice === undefined) throw new CheckoutError(`That vendor is no longer available for ${meal.name}. Please choose another vendor.`, 409);
-      vendorPrice = assignmentPrice === null ? meal.price : Number(assignmentPrice);
+      vendorPrice = assignmentPrice === null ? Number(meal.price) : Number(assignmentPrice);
+      const selectedSide = /-side-(Salad|Parboiled Beans|Fried Plantain)(?:-|$)/.exec(item.id)?.[1];
+      if (selectedSide) {
+        const sidePrice = vendorPriceBySide.get(`${item.vendorId}:${selectedSide}`);
+        if (sidePrice === undefined || sidePrice === null || !Number.isFinite(Number(sidePrice)) || Number(sidePrice) <= 0) {
+          throw new CheckoutError(`That vendor has not set a valid price for the ${selectedSide} side.`, 409);
+        }
+      }
       if (!Number.isFinite(vendorPrice) || vendorPrice <= 0) throw new CheckoutError(`That vendor has not set a valid price for ${meal.name}. Please choose another vendor.`, 409);
-      return { ...item, price: parseMealUnitPrice({ ...meal, price: vendorPrice }, item), name: item.name, isMeal: true };
+      const baseItemPrice = parseMealUnitPrice({ ...meal, price: vendorPrice }, item);
+      const sidePrice = selectedSide ? vendorPriceBySide.get(`${item.vendorId}:${selectedSide}`) : 0;
+      return { ...item, price: baseItemPrice + Number(sidePrice ?? 0), name: item.name, isMeal: true };
     }
     const product = productById.get(item.id);
     if (!product || product.stock_status === "unavailable") throw new CheckoutError(`${product?.name || "A product in your cart"} is no longer available.`, 409);
@@ -235,10 +247,11 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   const uniqueItems = [...new Map(input.items.map((item) => [itemAssignmentKey(item), item])).values()];
   const mealIds = [...new Set(uniqueItems.map((item) => /^([0-9]+)(?:-|$)/.exec(item.id)?.[1]).filter((id): id is string => Boolean(id)))];
   const productIds = uniqueItems.filter((item) => !/^([0-9]+)(?:-|$)/.test(item.id)).map((item) => item.id);
-  const [mealAssignments, productAssignments, mealRows] = await Promise.all([
+  const [mealAssignments, productAssignments, mealRows, mealSideAssignments] = await Promise.all([
     mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null; available_days: string[] | null }>>(`vendor_meals?meal_id=in.(${mealIds.join(",")})&select=vendor_id,meal_id,price,available_days`) : Promise.resolve([]),
     productIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; product_id: string }>>(`vendor_products?product_id=in.(${productIds.join(",")})&select=vendor_id,product_id`) : Promise.resolve([]),
-    mealIds.length ? supabaseAdminRequest<Array<{ id: number; price: number }>>(`meals?id=in.(${mealIds.join(",")})&select=id,price`) : Promise.resolve([]),
+    mealIds.length ? supabaseAdminRequest<Array<{ id: number; price: number | null }>>(`meals?id=in.(${mealIds.join(",")})&select=id,price`) : Promise.resolve([]),
+    mealIds.length ? supabaseAdminRequest<Array<{ vendor_id: number; side: string; price: number | null }>>(`vendor_meal_sides?select=vendor_id,side,price`) : Promise.resolve([]),
   ]);
   const baseMealPriceById = new Map(mealRows.map((meal) => [meal.id, Number(meal.price)]));
   const assignmentsByItem = new Map<string, Set<number>>();
@@ -257,7 +270,10 @@ export async function getDeliveryQuote(input: { items: PricedCheckoutItem[]; lat
   for (const item of uniqueItems) {
     const key = itemAssignmentKey(item);
     const assignedVendors = assignmentsByItem.get(assignmentLookupKey(item.id));
-    const candidates = eligible.filter((vendor) => assignedVendors?.has(vendor.id) && (!item.vendorId || item.vendorId === vendor.id));
+    const selectedSide = /-side-(Salad|Parboiled Beans|Fried Plantain)(?:-|$)/.exec(item.id)?.[1];
+    const candidates = eligible.filter((vendor) => assignedVendors?.has(vendor.id)
+      && (!item.vendorId || item.vendorId === vendor.id)
+      && (!selectedSide || mealSideAssignments.some((assignment) => assignment.vendor_id === vendor.id && assignment.side === selectedSide && assignment.price !== null && Number(assignment.price) > 0)));
     if (!candidates.length) throw new CheckoutError("We couldn’t prepare delivery pricing for this cart yet. Please try again shortly.", 409);
     candidates.sort((a, b) => distanceKm(latitude, longitude, a.latitude as number, a.longitude as number) - distanceKm(latitude, longitude, b.latitude as number, b.longitude as number) || a.id - b.id);
     selectedByItem.set(key, candidates[0].id);

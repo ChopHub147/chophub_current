@@ -7,7 +7,7 @@ type Meal = {
   id: number;
   name: string;
   description: string;
-  price: number;
+  price: number | null;
   category: string;
   image: string;
   available: boolean;
@@ -141,7 +141,8 @@ function normalizeVendorOnboarding(value: unknown): VendorOnboarding {
   };
 }
 
-type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; mealDays: Record<number, string[]>; onboardingData?: VendorOnboarding };
+type MealSide = "Salad" | "Parboiled Beans" | "Fried Plantain";
+type Vendor = { id: number; name: string; phone: string; address: string; latitude: number | null; longitude: number | null; notes: string; active: boolean; productIds: string[]; mealIds: number[]; mealPrices: Record<number, number | null>; mealDays: Record<number, string[]>; mealSidePrices: Partial<Record<MealSide, number | null>>; onboardingData?: VendorOnboarding };
 type Rider = { id: number; name: string; phone: string; base_area: string; availability: "available" | "busy" | "offline"; account_status: "pending" | "approved" | "suspended"; last_location_at?: string | null };
 
 export default function AdminDashboard({
@@ -189,7 +190,7 @@ export default function AdminDashboard({
   const [vendorError, setVendorError] = useState("");
   const [vendorSavedMessage, setVendorSavedMessage] = useState("");
   const [savingVendorId, setSavingVendorId] = useState<number | "new" | null>(null);
-  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, onboardingData: createEmptyVendorOnboarding() });
+  const [newVendor, setNewVendor] = useState<Omit<Vendor, "id">>({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, mealSidePrices: {}, onboardingData: createEmptyVendorOnboarding() });
   const [riders, setRiders] = useState<Rider[]>([]);
   const [riderError, setRiderError] = useState("");
   const [savingRiderId, setSavingRiderId] = useState<number | "new" | null>(null);
@@ -642,7 +643,7 @@ export default function AdminDashboard({
         const saved = result as Vendor;
         if (isNew) {
           setVendors((current) => [...current, saved]);
-          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, onboardingData: createEmptyVendorOnboarding() });
+          setNewVendor({ name: "", phone: "", address: "", latitude: null, longitude: null, notes: "", active: false, productIds: [], mealIds: [], mealPrices: {}, mealDays: {}, mealSidePrices: {}, onboardingData: createEmptyVendorOnboarding() });
         } else {
           setVendors((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved, productIds: saved.productIds || item.productIds, mealIds: saved.mealIds || item.mealIds, onboardingData: saved.onboardingData || item.onboardingData } : item));
         }
@@ -862,7 +863,7 @@ const saveOrderOperation = async (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <input value={newMeal.name} onChange={(event) => setNewMeal((current) => ({ ...current, name: event.target.value }))} placeholder="Meal name" className="rounded-lg border border-green-200 px-3 py-2" />
                   <input value={newMeal.category} onChange={(event) => setNewMeal((current) => ({ ...current, category: event.target.value }))} placeholder="Category (e.g. rice, meat, soup-swallow)" className="rounded-lg border border-green-200 px-3 py-2" />
-                  <label className="text-xs font-semibold text-gray-600 sm:col-span-2">Price (₦)<input type="number" min="0" step="0.01" value={newMeal.price} onChange={(event) => setNewMeal((current) => ({ ...current, price: Number(event.target.value) }))} className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2 text-sm" /></label>
+                  <label className="text-xs font-semibold text-gray-600 sm:col-span-2">Price (₦)<input type="number" min="0" step="0.01" value={newMeal.price ?? ""} onChange={(event) => setNewMeal((current) => ({ ...current, price: Number(event.target.value) }))} className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2 text-sm" /></label>
                   <textarea value={newMeal.description} onChange={(event) => setNewMeal((current) => ({ ...current, description: event.target.value }))} placeholder="Description" className="rounded-lg border border-green-200 px-3 py-2 sm:col-span-2" />
                   <div className="sm:col-span-2">
                     <label className="text-xs font-semibold text-gray-600">Meal image</label>
@@ -972,7 +973,7 @@ const saveOrderOperation = async (
                             type="number"
                             min="0"
                             className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2"
-                            value={meal.price}
+                            value={meal.price ?? ""}
                             onChange={(event) =>
                               setMeals((current) =>
                                 current.map((item) =>
@@ -1860,6 +1861,9 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
   const assignedProductIds = Array.isArray(vendor.productIds) ? vendor.productIds : [];
   const assignedMealPrices = vendor.mealPrices && typeof vendor.mealPrices === "object" ? vendor.mealPrices : {};
   const assignedMealDays = vendor.mealDays && typeof vendor.mealDays === "object" ? vendor.mealDays : {};
+  const assignedMealSidePrices = vendor.mealSidePrices && typeof vendor.mealSidePrices === "object" ? vendor.mealSidePrices : {};
+  const hasRiceMeal = meals.some((meal) => assignedMealIds.includes(meal.id) && meal.category === "rice");
+  const mealSides: MealSide[] = ["Salad", "Parboiled Beans", "Fried Plantain"];
   const defaultMealDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const toggleMeal = (mealId: number) => {
     const mealIds = assignedMealIds.includes(mealId) ? assignedMealIds.filter((id) => id !== mealId) : [...assignedMealIds, mealId];
@@ -1892,7 +1896,7 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
               {assignedMealIds.includes(meal.id) && (
                 <div className="space-y-2 text-xs text-gray-600">
                   <label className="block">Vendor price (₦)
-                    <input type="number" min={meal.price > 0 ? 0 : 0.01} step="0.01" aria-label={`${meal.name} vendor price`} placeholder={meal.price > 0 ? `Base ₦${meal.price.toLocaleString()}` : "Required vendor price"} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+                    <input type="number" min={(meal.price ?? 0) > 0 ? 0 : 0.01} step="0.01" aria-label={`${meal.name} vendor price`} placeholder={(meal.price ?? 0) > 0 ? `Base ₦${(meal.price ?? 0).toLocaleString()}` : "Required vendor price"} value={assignedMealPrices[meal.id] ?? ""} onChange={(event) => onChange({ ...vendor, mealPrices: { ...assignedMealPrices, [meal.id]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
                   </label>
                   <fieldset><legend className="font-semibold">Available days</legend><div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">{onboardingDays.map((day) => {
                     const days = Array.isArray(assignedMealDays[meal.id]) ? assignedMealDays[meal.id] : defaultMealDays;
@@ -1905,6 +1909,19 @@ function VendorFields({ vendor, products, meals, onChange }: { vendor: Omit<Vend
         </div>
         <p className="mt-2 text-xs text-gray-500">A blank vendor price uses the base menu price, when one exists. Meals with a ₦0 base price need a positive vendor price and must also be marked available before customers can order them.</p>
       </fieldset>
+      {hasRiceMeal && (
+        <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
+          <legend className="px-1 text-sm font-semibold text-green-900">Rice meal side prices</legend>
+          <p className="mb-2 text-xs text-gray-500">Set each side price separately. These prices apply to this vendor&apos;s rice meals; blank sides are not available.</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {mealSides.map((side) => (
+              <label key={side} className="text-xs text-gray-600">{side} (₦)
+                <input type="number" min="0.01" step="0.01" placeholder="Required" value={assignedMealSidePrices[side] ?? ""} onChange={(event) => onChange({ ...vendor, mealSidePrices: { ...assignedMealSidePrices, [side]: event.target.value === "" ? null : Number(event.target.value) } })} className="mt-1 w-full rounded border border-green-200 px-2 py-1.5 text-sm text-gray-900" />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <fieldset className="rounded-lg border border-green-200 p-3 sm:col-span-2">
         <legend className="px-1 text-sm font-semibold text-green-900">Groceries & Fresh Food this vendor offers ({assignedProductIds.length} selected)</legend>
         <div className="max-h-48 space-y-1 overflow-y-auto">

@@ -21,7 +21,6 @@ const dishes: MenuDish[] = [
   ["Parfait", 5000, "A creamy, layered parfait treat.", "/Parfait.webp", "dessert"],
   ["Fresh Roasted Fish", 8000, "Well-seasoned roasted fish served with spicy pepper sauce.", "/grilled_fish.JPG", "meat"],
   ["Abáchà", 4000, "Traditional African salad prepared with delicious local ingredients.", "/abacha.JPG", "dessert"],
-  ["Plain/White Rice", 0, "Plain white rice.", "/Long-grain_rice.webp", "rice", false],
   ["Goat Meat Pepper Soup", 0, "Goat meat pepper soup.", "/cooked-food.png", "pepper-soup", false],
   ["Chicken Pepper Soup", 0, "Chicken pepper soup.", "/cooked-food.png", "pepper-soup", false],
   ["Catfish Pepper Soup", 0, "Catfish pepper soup.", "/cooked-food.png", "pepper-soup", false],
@@ -30,6 +29,11 @@ const dishes: MenuDish[] = [
   ["Rice & Goat Meat Stew", 0, "Steamed white rice served with goat meat stew.", "/rice_stew.jpg", "rice", false],
   ["Rice & Beef Stew", 0, "Steamed white rice served with beef stew.", "/rice_stew.jpg", "rice", false],
   ["Cooked Snails", 0, "Cooked snails prepared with traditional seasoning.", "/cooked-food.png", "seafood", false],
+  ["Coconut Rice", 0, "Coconut rice.", "/coconut.jpg", "rice", false],
+  ["Fried Rice", 0, "Fried rice.", "/cooked-food.png", "rice", false],
+  ["Spaghetti", 0, "Spaghetti.", "/cooked-food.png", "pasta", false],
+  ["Ekpang", 0, "Ekpang.", "/cooked-food.png", "special", false],
+  ["Moi-Moi", 0, "Moi-Moi.", "/cooked-food.png", "special", false],
 ];
 
 const dishIds: Record<string, number> = {
@@ -49,7 +53,6 @@ const dishIds: Record<string, number> = {
   Shawarma: 14,
   Parfait: 15,
   "Abáchà": 16,
-  "Plain/White Rice": 17,
   "Goat Meat Pepper Soup": 18,
   "Chicken Pepper Soup": 19,
   "Catfish Pepper Soup": 20,
@@ -58,6 +61,11 @@ const dishIds: Record<string, number> = {
   "Rice & Goat Meat Stew": 23,
   "Rice & Beef Stew": 24,
   "Cooked Snails": 25,
+  "Coconut Rice": 26,
+  "Fried Rice": 27,
+  Spaghetti: 28,
+  Ekpang: 29,
+  "Moi-Moi": 30,
 };
 
 const defaultCategoryNames: Record<string, string> = {

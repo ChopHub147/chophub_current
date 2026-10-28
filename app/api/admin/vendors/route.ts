@@ -4,7 +4,9 @@ import { adminCookieName, isValidAdminSession } from "@/lib/admin-auth";
 import { supabaseAdminRequest } from "@/lib/supabase-admin";
 import { sendWelcomeEmail } from "@/lib/email";
 
-type VendorPayload = { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; notes?: unknown; active?: unknown; productIds?: unknown; mealIds?: unknown; mealPrices?: unknown; mealDays?: unknown; onboardingData?: unknown };
+type VendorPayload = { id?: unknown; name?: unknown; phone?: unknown; address?: unknown; latitude?: unknown; longitude?: unknown; notes?: unknown; active?: unknown; productIds?: unknown; mealIds?: unknown; mealPrices?: unknown; mealDays?: unknown; mealSidePrices?: unknown; onboardingData?: unknown };
+const mealSides = ["Salad", "Parboiled Beans", "Fried Plantain"] as const;
+type MealSide = (typeof mealSides)[number];
 
 async function requireAdmin() {
   return isValidAdminSession((await cookies()).get(adminCookieName)?.value);
@@ -61,7 +63,19 @@ function mealDays(body: VendorPayload) {
     if (!Number.isInteger(mealId) || mealId < 1 || !Array.isArray(days)) continue;
     daysByMeal[mealId] = [...new Set(days.filter((day): day is string => typeof day === "string" && ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].includes(day)))];
   }
+
   return daysByMeal;
+}
+
+function mealSidePrices(body: VendorPayload): Partial<Record<MealSide, number | null>> {
+  if (typeof body.mealSidePrices !== "object" || body.mealSidePrices === null || Array.isArray(body.mealSidePrices)) return {};
+  const prices: Partial<Record<MealSide, number | null>> = {};
+  for (const side of mealSides) {
+    const price = (body.mealSidePrices as Record<string, unknown>)[side];
+    if (price === null || price === "") prices[side] = null;
+    else if (typeof price === "number" && Number.isFinite(price) && price >= 0) prices[side] = price;
+  }
+  return prices;
 }
 
 async function replaceProducts(vendorId: number, ids: string[]) {
@@ -76,6 +90,12 @@ async function replaceMeals(vendorId: number, ids: number[], prices: Record<numb
   if (ids.length > 0) await supabaseAdminRequest("vendor_meals", { method: "POST", body: JSON.stringify(ids.map((meal_id) => ({ vendor_id: vendorId, meal_id, price: prices[meal_id] ?? null, available_days: days[meal_id] ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] }))) });
 }
 
+async function replaceMealSides(vendorId: number, prices: Partial<Record<MealSide, number | null>>) {
+  await supabaseAdminRequest(`vendor_meal_sides?vendor_id=eq.${vendorId}`, { method: "DELETE" });
+  const rows = mealSides.filter((side) => prices[side] !== undefined).map((side) => ({ vendor_id: vendorId, side, price: prices[side] }));
+  if (rows.length > 0) await supabaseAdminRequest("vendor_meal_sides", { method: "POST", body: JSON.stringify(rows) });
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown database error";
 }
@@ -83,14 +103,15 @@ function errorMessage(error: unknown) {
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const [vendors, assignments, mealAssignments] = await Promise.all([
+    const [vendors, assignments, mealAssignments, sideAssignments] = await Promise.all([
       supabaseAdminRequest<Array<Record<string, unknown>>>("vendors?select=*&order=name.asc"),
       supabaseAdminRequest<Array<{ vendor_id: number; product_id: string }>>("vendor_products?select=vendor_id,product_id"),
       supabaseAdminRequest<Array<{ vendor_id: number; meal_id: number; price: number | null; available_days: string[] }>>("vendor_meals?select=vendor_id,meal_id,price,available_days"),
+      supabaseAdminRequest<Array<{ vendor_id: number; side: MealSide; price: number | null }>>("vendor_meal_sides?select=vendor_id,side,price"),
     ]);
     return NextResponse.json(vendors.map((vendor) => {
       const vendorMeals = mealAssignments.filter((assignment) => assignment.vendor_id === vendor.id);
-      return { ...vendor, onboardingData: vendor.onboarding_data ?? undefined, productIds: assignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => assignment.product_id), mealIds: vendorMeals.map((assignment) => assignment.meal_id), mealPrices: Object.fromEntries(vendorMeals.map((assignment) => [assignment.meal_id, assignment.price])), mealDays: Object.fromEntries(vendorMeals.map((assignment) => [assignment.meal_id, assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]])) };
+      return { ...vendor, onboardingData: vendor.onboarding_data ?? undefined, productIds: assignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => assignment.product_id), mealIds: vendorMeals.map((assignment) => assignment.meal_id), mealPrices: Object.fromEntries(vendorMeals.map((assignment) => [assignment.meal_id, assignment.price])), mealDays: Object.fromEntries(vendorMeals.map((assignment) => [assignment.meal_id, assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]])), mealSidePrices: Object.fromEntries(sideAssignments.filter((assignment) => assignment.vendor_id === vendor.id).map((assignment) => [assignment.side, assignment.price])) };
     }));
   } catch (error) {
     console.error("Vendor list request failed", error);
@@ -110,13 +131,14 @@ export async function POST(request: Request) {
     vendorId = vendor.id;
     await replaceProducts(vendor.id, productIds(body));
     await replaceMeals(vendor.id, mealIds(body), mealPrices(body), mealDays(body));
+    await replaceMealSides(vendor.id, mealSidePrices(body));
     const onboarding = body.onboardingData as { email?: unknown; ownerName?: unknown } | undefined;
     const vendorEmail = typeof onboarding?.email === "string" ? onboarding.email.trim().toLowerCase() : "";
     const ownerName = typeof onboarding?.ownerName === "string" && onboarding.ownerName.trim() ? onboarding.ownerName.trim() : fields.name;
     const welcomeEmailSent = /^\S+@\S+\.\S+$/.test(vendorEmail)
       ? await sendWelcomeEmail(vendorEmail, ownerName, "vendor")
       : false;
-    return NextResponse.json({ ...vendor, ...fields, onboardingData: body.onboardingData, productIds: productIds(body), mealIds: mealIds(body), mealPrices: mealPrices(body), mealDays: mealDays(body), welcomeEmailSent });
+    return NextResponse.json({ ...vendor, ...fields, onboardingData: body.onboardingData, productIds: productIds(body), mealIds: mealIds(body), mealPrices: mealPrices(body), mealDays: mealDays(body), mealSidePrices: mealSidePrices(body), welcomeEmailSent });
   } catch (error) {
     if (vendorId !== undefined) await supabaseAdminRequest(`vendors?id=eq.${vendorId}`, { method: "DELETE" }).catch((rollbackError) => console.error("Could not roll back incomplete vendor save", rollbackError));
     console.error("Vendor create request failed", error);
@@ -135,7 +157,8 @@ export async function PATCH(request: Request) {
     const [vendor] = Object.keys(fields).length > 0 ? await supabaseAdminRequest<Array<Record<string, unknown>>>(`vendors?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(fields) }) : [{}];
     if (Array.isArray(body.productIds)) await replaceProducts(id, productIds(body));
     if (Array.isArray(body.mealIds)) await replaceMeals(id, mealIds(body), mealPrices(body), mealDays(body));
-    return NextResponse.json({ ...vendor, onboardingData: body.onboardingData, productIds: Array.isArray(body.productIds) ? productIds(body) : undefined, mealIds: Array.isArray(body.mealIds) ? mealIds(body) : undefined, mealPrices: Array.isArray(body.mealIds) ? mealPrices(body) : undefined, mealDays: Array.isArray(body.mealIds) ? mealDays(body) : undefined });
+    if (body.mealSidePrices !== undefined) await replaceMealSides(id, mealSidePrices(body));
+    return NextResponse.json({ ...vendor, onboardingData: body.onboardingData, productIds: Array.isArray(body.productIds) ? productIds(body) : undefined, mealIds: Array.isArray(body.mealIds) ? mealIds(body) : undefined, mealPrices: Array.isArray(body.mealIds) ? mealPrices(body) : undefined, mealDays: Array.isArray(body.mealIds) ? mealDays(body) : undefined, mealSidePrices: body.mealSidePrices !== undefined ? mealSidePrices(body) : undefined });
   } catch (error) {
     console.error("Vendor update request failed", error);
     return NextResponse.json({ error: `Vendor services could not be saved: ${errorMessage(error)}` }, { status: 500 });
