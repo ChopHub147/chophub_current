@@ -31,7 +31,7 @@ export async function getMealCatalog(): Promise<CatalogMeal[]> {
   ]);
   const eligibleVendors = new Map(vendors.filter(hasCoordinates).map((vendor) => [vendor.id, vendor]));
 
-  return meals.map((meal) => {
+  return meals.filter((meal) => meal.name !== "Plain/White Rice").map((meal) => {
     const mealVendors = assignments
       .filter((assignment) => assignment.meal_id === meal.id && eligibleVendors.has(assignment.vendor_id))
       .filter((assignment) => (assignment.available_days ?? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]).includes(today))

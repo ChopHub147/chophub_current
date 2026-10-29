@@ -311,25 +311,18 @@ export default function CookedFoodPage() {
       type: "special" as const,
       sectionTitle: "Abáchà",
     },
-    {
-      id: 17,
-      name: "Plain/White Rice",
-      price: 0,
-      desc: "Plain white rice.",
-      image: "/Long-grain_rice.webp",
-      type: "plain",
-      available: false,
-    },
-    { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
-    { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
-    { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/cooked-food.png", type: "pepper-soup", available: false },
-    { id: 21, name: "Pasta with Chicken", price: 0, desc: "Pasta with chicken.", image: "/cooked-food.png", type: "special", available: false },
-    { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_stew.jpg", type: "rice", available: false },
+    { id: 18, name: "Goat Meat Pepper Soup", price: 0, desc: "Goat meat pepper soup.", image: "/goat_peppersoup.jpeg", type: "pepper-soup", available: false },
+    { id: 19, name: "Chicken Pepper Soup", price: 0, desc: "Chicken pepper soup.", image: "/chicken-pepper-soup.jpg", type: "pepper-soup", available: false },
+    { id: 20, name: "Catfish Pepper Soup", price: 0, desc: "Catfish pepper soup.", image: "/catfish_peppersoup.jpeg", type: "pepper-soup", available: false },
+    { id: 21, name: "Pasta with Chicken", price: 0, desc: "Pasta with chicken.", image: "/Chicken_Pasta.jpg", type: "special", available: false },
+    { id: 22, name: "Rice & Chicken Stew", price: 0, desc: "Steamed white rice served with chicken stew.", image: "/rice_and_chicken_stew.jpeg", type: "rice", available: false },
     { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
-    { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "soup", available: false },
-    { id: 26, name: "Nkwobi", price: 0, desc: "Nkwobi.", image: "/cooked-food.png", type: "meat", available: false },
-    { id: 27, name: "Isi Ewu", price: 0, desc: "Isi Ewu.", image: "/cooked-food.png", type: "meat", available: false },
+    { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked_snail.jpg", type: "soup", available: false },
+    { id: 26, name: "Nkwobi", price: 0, desc: "Nkwobi.", image: "/NKWOBI.JPG", type: "meat", available: false },
+    { id: 27, name: "Isi Ewu", price: 0, desc: "Isi Ewu.", image: "/isi_ewu.jpg", type: "meat", available: false },
+    { id: 28, name: "Coconut Rice", price: 0, desc: "Coconut rice.", image: "/Coconut-rice.jpeg", type: "rice", available: false },
+    { id: 29, name: "Fried Rice", price: 0, desc: "Fried rice.", image: "/Fried_Rice.webp", type: "rice", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
@@ -343,7 +336,7 @@ export default function CookedFoodPage() {
   ]);
 
   const featuredDishes = dishes.filter((dish) =>
-    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].includes(dish.id)
+    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29].includes(dish.id)
   );
 
   const [selectedSwallow, setSelectedSwallow] = useState<Record<number, string>>({});
@@ -394,7 +387,7 @@ export default function CookedFoodPage() {
               : meal.category === "pepper-soup"
                 ? "pepper-soup"
               : meal.category === "rice"
-                ? meal.name === "Plain/White Rice" ? "plain" : "rice"
+                ? "rice"
                 : meal.name === "Fresh Roasted Fish"
                   ? "fish"
                   : meal.category === "meat"
@@ -1009,6 +1002,10 @@ export default function CookedFoodPage() {
           </div>
         </div>
       </section>
+
+      <p className="mx-auto max-w-6xl px-4 pb-8 text-center text-xs text-gray-500">
+        Images are for reference only. Final meals may vary by vendor.
+      </p>
 
       {/* About Section */}
       <section id="about" className="bg-white py-16 scroll-mt-24">

@@ -21,17 +21,18 @@ const dishes: MenuDish[] = [
   ["Parfait", 5000, "A creamy, layered parfait treat.", "/Parfait.webp", "dessert"],
   ["Fresh Roasted Fish", 8000, "Well-seasoned roasted fish served with spicy pepper sauce.", "/grilled_fish.JPG", "meat"],
   ["Abáchà", 4000, "Traditional African salad prepared with delicious local ingredients.", "/abacha.JPG", "dessert"],
-  ["Plain/White Rice", 0, "Plain white rice.", "/Long-grain_rice.webp", "rice", false],
-  ["Goat Meat Pepper Soup", 0, "Goat meat pepper soup.", "/cooked-food.png", "pepper-soup", false],
-  ["Chicken Pepper Soup", 0, "Chicken pepper soup.", "/cooked-food.png", "pepper-soup", false],
-  ["Catfish Pepper Soup", 0, "Catfish pepper soup.", "/cooked-food.png", "pepper-soup", false],
-  ["Pasta with Chicken", 0, "Pasta with chicken.", "/cooked-food.png", "pasta", false],
-  ["Rice & Chicken Stew", 0, "Steamed white rice served with chicken stew.", "/rice_stew.jpg", "rice", false],
+  ["Goat Meat Pepper Soup", 0, "Goat meat pepper soup.", "/goat_peppersoup.jpeg", "pepper-soup", false],
+  ["Chicken Pepper Soup", 0, "Chicken pepper soup.", "/chicken-pepper-soup.jpg", "pepper-soup", false],
+  ["Catfish Pepper Soup", 0, "Catfish pepper soup.", "/catfish_peppersoup.jpeg", "pepper-soup", false],
+  ["Pasta with Chicken", 0, "Pasta with chicken.", "/Chicken_Pasta.jpg", "pasta", false],
+  ["Rice & Chicken Stew", 0, "Steamed white rice served with chicken stew.", "/rice_and_chicken_stew.jpeg", "rice", false],
   ["Rice & Goat Meat Stew", 0, "Steamed white rice served with goat meat stew.", "/rice_stew.jpg", "rice", false],
   ["Rice & Beef Stew", 0, "Steamed white rice served with beef stew.", "/rice_stew.jpg", "rice", false],
-  ["Cooked Snails", 0, "Cooked snails prepared with traditional seasoning.", "/cooked-food.png", "seafood", false],
-  ["Nkwobi", 0, "Nkwobi.", "/cooked-food.png", "meat", false],
-  ["Isi Ewu", 0, "Isi Ewu.", "/cooked-food.png", "meat", false],
+  ["Cooked Snails", 0, "Cooked snails prepared with traditional seasoning.", "/cooked_snail.jpg", "seafood", false],
+  ["Nkwobi", 0, "Nkwobi.", "/NKWOBI.JPG", "meat", false],
+  ["Isi Ewu", 0, "Isi Ewu.", "/isi_ewu.jpg", "meat", false],
+  ["Coconut Rice", 0, "Coconut rice.", "/Coconut-rice.jpeg", "rice", false],
+  ["Fried Rice", 0, "Fried rice.", "/Fried_Rice.webp", "rice", false],
 ];
 
 const dishIds: Record<string, number> = {
@@ -51,7 +52,6 @@ const dishIds: Record<string, number> = {
   Shawarma: 14,
   Parfait: 15,
   "Abáchà": 16,
-  "Plain/White Rice": 17,
   "Goat Meat Pepper Soup": 18,
   "Chicken Pepper Soup": 19,
   "Catfish Pepper Soup": 20,
@@ -62,6 +62,8 @@ const dishIds: Record<string, number> = {
   "Cooked Snails": 25,
   Nkwobi: 26,
   "Isi Ewu": 27,
+  "Coconut Rice": 28,
+  "Fried Rice": 29,
 };
 
 const defaultCategoryNames: Record<string, string> = {
