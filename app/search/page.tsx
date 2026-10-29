@@ -50,6 +50,8 @@ const fallbackMeals: Meal[] = [
   { id: 22, name: "Rice & Chicken Stew", description: "Steamed white rice served with chicken stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
   { id: 23, name: "Rice & Goat Meat Stew", description: "Steamed white rice served with goat meat stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
   { id: 24, name: "Rice & Beef Stew", description: "Steamed white rice served with beef stew.", price: 0, image: "/rice_stew.jpg", category: "rice", available: false },
+  { id: 26, name: "Nkwobi", description: "Nkwobi.", price: 0, image: "/cooked-food.png", category: "meat", available: false },
+  { id: 27, name: "Isi Ewu", description: "Isi Ewu.", price: 0, image: "/cooked-food.png", category: "meat", available: false },
 ];
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {

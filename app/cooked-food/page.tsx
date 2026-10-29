@@ -16,6 +16,7 @@ type CartItem = {
   price: number;
   quantity: number;
   image: string;
+  randomColour?: boolean;
 };
 
 type CustomerProfile = {
@@ -327,6 +328,8 @@ export default function CookedFoodPage() {
     { id: 23, name: "Rice & Goat Meat Stew", price: 0, desc: "Steamed white rice served with goat meat stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 24, name: "Rice & Beef Stew", price: 0, desc: "Steamed white rice served with beef stew.", image: "/rice_stew.jpg", type: "rice", available: false },
     { id: 25, name: "Cooked Snails", price: 0, desc: "Cooked snails prepared with traditional seasoning.", image: "/cooked-food.png", type: "soup", available: false },
+    { id: 26, name: "Nkwobi", price: 0, desc: "Nkwobi.", image: "/cooked-food.png", type: "meat", available: false },
+    { id: 27, name: "Isi Ewu", price: 0, desc: "Isi Ewu.", image: "/cooked-food.png", type: "meat", available: false },
   ];
   const [dishes, setDishes] = useState<Dish[]>(fallbackDishes);
   const [mealCategories, setMealCategories] = useState<Array<[string, string]>>([
@@ -340,7 +343,7 @@ export default function CookedFoodPage() {
   ]);
 
   const featuredDishes = dishes.filter((dish) =>
-    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25].includes(dish.id)
+    [1, 3, 12, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27].includes(dish.id)
   );
 
   const [selectedSwallow, setSelectedSwallow] = useState<Record<number, string>>({});
@@ -1411,6 +1414,7 @@ export default function CookedFoodPage() {
                           <h3 className="font-semibold text-green-900">
                             {item.name}
                           </h3>
+                          {item.randomColour && <p className="text-xs text-gray-500">Colour: random for each piece (customers cannot choose)</p>}
                           <p className="text-green-700 font-medium">
                             {(quoteItem?.isMeal ? quoteItem.price : item.price) > 0
                               ? `₦${(quoteItem?.isMeal ? quoteItem.price : item.price).toLocaleString()} / portion`

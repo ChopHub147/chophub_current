@@ -15,6 +15,7 @@ type Product = {
   icon: string;
   available: boolean;
   variant_options: Array<{ name: string; price: number }>;
+  randomColour?: boolean;
 };
 
 type CartItem = {
@@ -24,9 +25,11 @@ type CartItem = {
   price: number;
   quantity: number;
   image: string;
+  randomColour?: boolean;
 };
 
 const cartStorageKey = "chophub-cart";
+const bicMaxiJ6LighterId = "foodstuff-bic-j6maxi-lighter";
 
 type ProductSeed = readonly [string, string, string, string, number, string, string];
 
@@ -150,7 +153,8 @@ const products: Product[] = [...([
   ["mosquito-coils", "Mosquito coils", "Household", "Pack", 1000, "Convenient household mosquito protection for outdoor and indoor use.", "🌀"],
   ["air-freshener", "Air freshener", "Household", "300 ml", 1800, "Helps keep rooms smelling fresh and pleasant.", "🌿"],
   ["laundry-pegs", "Laundry pegs", "Household", "Pack", 900, "Reusable pegs for hanging and drying clothes.", "📌"],
-] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, subcategory: "", pack, price, description, icon, available: true, variant_options: [] })), {
+  ["bic-j6maxi-lighter", "BIC Maxi J6 lighter", "Household", "1 piece", 1000, "Colour is selected at random for each piece; customers cannot choose the colour.", "/bic_j6maxi.webp"],
+] as ProductSeed[]).map(([id, name, category, pack, price, description, icon]) => ({ id: `foodstuff-${id}`, name, category, subcategory: "", pack, price, description, icon, available: true, variant_options: [], ...(id === "bic-j6maxi-lighter" ? { randomColour: true } : {}) })), {
   id: "foodstuff-ensure",
   name: "Ensure",
   category: "Beverages",
@@ -273,6 +277,7 @@ export default function FoodstuffPage() {
             icon: String(product.image || "🛒"),
             available: product.stock_status !== "unavailable",
             variant_options: Array.isArray(product.variant_options) ? product.variant_options as Product["variant_options"] : [],
+            ...(String(product.id) === bicMaxiJ6LighterId ? { randomColour: true } : {}),
           }));
           const mergedCatalog = new Map(products.map((product) => [product.id, product]));
           for (const databaseProduct of databaseCatalog) {
@@ -295,8 +300,8 @@ export default function FoodstuffPage() {
     const itemName = `${product.name} (${selectedSize.unit})`;
     const existing = cart.find((item) => item.id === cartId);
     const nextCart = existing
-      ? cart.map((item) => item.id === cartId ? { ...item, quantity: item.quantity + 1 } : item)
-      : [...cart, { id: cartId, productId: product.id, name: itemName, price: selectedSize.price, quantity: 1, image: photoForGrocery(product) || product.icon }];
+      ? cart.map((item) => item.id === cartId ? { ...item, quantity: item.quantity + 1, ...(product.randomColour ? { randomColour: true } : {}) } : item)
+      : [...cart, { id: cartId, productId: product.id, name: itemName, price: selectedSize.price, quantity: 1, image: photoForGrocery(product) || product.icon, ...(product.randomColour ? { randomColour: true } : {}) }];
     window.localStorage.setItem(cartStorageKey, JSON.stringify(nextCart));
     window.dispatchEvent(new Event("chophub-cart-updated"));
     setCartCount(nextCart.reduce((total, item) => total + item.quantity, 0));

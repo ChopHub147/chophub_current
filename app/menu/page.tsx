@@ -30,6 +30,8 @@ const dishes: MenuDish[] = [
   ["Rice & Goat Meat Stew", 0, "Steamed white rice served with goat meat stew.", "/rice_stew.jpg", "rice", false],
   ["Rice & Beef Stew", 0, "Steamed white rice served with beef stew.", "/rice_stew.jpg", "rice", false],
   ["Cooked Snails", 0, "Cooked snails prepared with traditional seasoning.", "/cooked-food.png", "seafood", false],
+  ["Nkwobi", 0, "Nkwobi.", "/cooked-food.png", "meat", false],
+  ["Isi Ewu", 0, "Isi Ewu.", "/cooked-food.png", "meat", false],
 ];
 
 const dishIds: Record<string, number> = {
@@ -58,6 +60,8 @@ const dishIds: Record<string, number> = {
   "Rice & Goat Meat Stew": 23,
   "Rice & Beef Stew": 24,
   "Cooked Snails": 25,
+  Nkwobi: 26,
+  "Isi Ewu": 27,
 };
 
 const defaultCategoryNames: Record<string, string> = {
